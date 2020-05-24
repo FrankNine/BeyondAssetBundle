@@ -36,6 +36,7 @@ class EndiannessWriter : IDisposable
     public void WriteInt64(Int64 value)
         => Write(BitConverter.GetBytes(value));
 
+
     public void WriteUInt16(UInt16 value)
         => Write(BitConverter.GetBytes(value));
 
@@ -45,8 +46,39 @@ class EndiannessWriter : IDisposable
     public void WriteUInt64(UInt64 value)
         => Write(BitConverter.GetBytes(value));
 
+
     public void WriteSingle(float value)
         => Write(BitConverter.GetBytes(value));
+
+    public void WriteVector2(Vector2 value)
+    {
+        WriteSingle(value.X);
+        WriteSingle(value.Y);
+    }
+
+    public void WriteVector3(Vector3 value)
+    {
+        WriteSingle(value.X);
+        WriteSingle(value.Y);
+        WriteSingle(value.Z);
+    }
+
+    public void WriteVector4(Vector4 value)
+    {
+        WriteSingle(value.X);
+        WriteSingle(value.Y);
+        WriteSingle(value.Z);
+        WriteSingle(value.W);
+    }
+
+    public void WriteRect(Rect value)
+    {
+        WriteSingle(value.X);
+        WriteSingle(value.Y);
+        WriteSingle(value.Width);
+        WriteSingle(value.Height);
+    }
+
 
     public void Align(int alignment)
     {
@@ -71,14 +103,11 @@ class EndiannessWriter : IDisposable
     public void WritePPtr(PPtr pptr, UInt32 version)
     {
         WriteInt32(pptr.m_FileID);
+
         if (version < 14)
-        {
             WriteInt32((Int32)pptr.m_PathID);
-        }
         else
-        {
             WriteInt64(pptr.m_PathID);
-        }
     }
 
     public void WriteBoolean(bool value)

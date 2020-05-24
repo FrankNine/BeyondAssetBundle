@@ -476,19 +476,14 @@ public class Build
                 Width = 32,
                 Height = 32
             };
-            endiannessWriter.WriteSingle(rect.X);
-            endiannessWriter.WriteSingle(rect.Y);
-            endiannessWriter.WriteSingle(rect.Width);
-            endiannessWriter.WriteSingle(rect.Height);
+            endiannessWriter.WriteRect(rect);
 
             var offset = new Vector2
             {
                 X = 0,
                 Y = 0
             };
-
-            endiannessWriter.WriteSingle(offset.X);
-            endiannessWriter.WriteSingle(offset.Y);
+            endiannessWriter.WriteVector2(offset);
 
             var border = new Vector4
             {
@@ -497,14 +492,9 @@ public class Build
                 Z = 0,
                 W = 0.609523833f
             };
-
-            endiannessWriter.WriteSingle(border.X);
-            endiannessWriter.WriteSingle(border.Y);
-            endiannessWriter.WriteSingle(border.Z);
-            endiannessWriter.WriteSingle(border.W);
+            endiannessWriter.WriteVector4(border);
 
             float pixelToUnit = 10.1587305f;
-
             endiannessWriter.WriteSingle(pixelToUnit);
 
             var pivot = new Vector2
@@ -512,9 +502,7 @@ public class Build
                 X = 0.5f,
                 Y = 0.5f
             };
-
-            endiannessWriter.WriteSingle(pivot.X);
-            endiannessWriter.WriteSingle(pivot.Y);
+            endiannessWriter.WriteVector2(pivot);
 
             Int32 extrude = 1;
 
@@ -545,9 +533,7 @@ public class Build
                 m_FileID = 0,
                 m_PathID = 0
             };
-
-            endiannessWriter.WriteInt32(spriteAtlas.m_FileID);
-            endiannessWriter.WriteInt64(spriteAtlas.m_PathID);
+            endiannessWriter.WritePPtr(spriteAtlas, serializedFileHeader.m_Version);
 
             var spriteRenderData = new SpriteRenderData
             {
