@@ -115,8 +115,8 @@ public enum GfxPrimitiveType : int
 
 public class AABB
 {
-    public Vector3 m_Center;
-    public Vector3 m_Extent;
+    public Vector3 Center;
+    public Vector3 Extent;
 }
 
 public class SubMesh
@@ -559,8 +559,8 @@ public class Build
                         vertexCount = 4,
                         localAABB = new AABB
                         {
-                            m_Center = new Vector3 {X = 0, Y = 0, Z = 0},
-                            m_Extent = new Vector3 {X = 0, Y = 0, Z = 0}
+                            Center = new Vector3 {X = 0, Y = 0, Z = 0},
+                            Extent = new Vector3 {X = 0, Y = 0, Z = 0}
                         }
                     }
                 },
@@ -690,9 +690,11 @@ public class Build
                 endiannessWriter.WriteUInt32(subMesh.baseVertex);
                 endiannessWriter.WriteUInt32(subMesh.firstVertex);
                 endiannessWriter.WriteUInt32(subMesh.vertexCount);
-
+                endiannessWriter.WriteAABB(subMesh.localAABB);
             }
-           
+
+            endiannessWriter.WriteInt32(spriteRenderData.m_IndexBuffer.Length);
+            endiannessWriter.Write(spriteRenderData.m_IndexBuffer);
         }
     }
 }

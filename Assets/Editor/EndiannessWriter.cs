@@ -79,6 +79,12 @@ class EndiannessWriter : IDisposable
         WriteSingle(value.Height);
     }
 
+    public void WriteAABB(AABB value)
+    {
+        WriteVector3(value.Center);
+        WriteVector3(value.Extent);
+    }
+
 
     public void Align(int alignment)
     {
