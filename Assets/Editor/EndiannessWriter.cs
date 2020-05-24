@@ -13,7 +13,7 @@ class EndiannessWriter : IDisposable
     {
         _writer = writer;
         _endianness = endianness;
-    }
+    } 
 
     public void WriteWithoutEndianness(byte[] buffer)
         => _writer.Write(buffer);
@@ -30,6 +30,9 @@ class EndiannessWriter : IDisposable
         => Write(BitConverter.GetBytes(value));
 
     public void WriteInt64(Int64 value)
+        => Write(BitConverter.GetBytes(value));
+
+    public void WriteUInt16(UInt16 value)
         => Write(BitConverter.GetBytes(value));
 
     public void WriteUInt32(UInt32 value)
