@@ -19,6 +19,9 @@ class EndiannessWriter : IDisposable
     public void WriteWithoutEndianness(byte[] buffer)
         => _writer.Write(buffer);
 
+    public void Write(byte b)
+        => _writer.Write(b);
+
     public void Write(byte[] buffer)
     {
         if (Endianness == Endianness.Big)

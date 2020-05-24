@@ -695,6 +695,19 @@ public class Build
 
             endiannessWriter.WriteInt32(spriteRenderData.m_IndexBuffer.Length);
             endiannessWriter.Write(spriteRenderData.m_IndexBuffer);
+            
+            endiannessWriter.WriteUInt32(spriteRenderData.m_VertexData.m_VertexCount);
+            endiannessWriter.WriteInt32(spriteRenderData.m_VertexData.m_Channels.Length);
+            foreach (var channel in spriteRenderData.m_VertexData.m_Channels)
+            {
+                endiannessWriter.Write(channel.stream);
+                endiannessWriter.Write(channel.offset);
+                endiannessWriter.Write(channel.format);
+                endiannessWriter.Write(channel.dimension);
+            }
+
+            endiannessWriter.WriteInt32(spriteRenderData.m_DataSize.Length);
+            endiannessWriter.Write(spriteRenderData.m_DataSize);
         }
     }
 }
