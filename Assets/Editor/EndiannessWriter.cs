@@ -45,6 +45,9 @@ class EndiannessWriter : IDisposable
     public void WriteUInt64(UInt64 value)
         => Write(BitConverter.GetBytes(value));
 
+    public void WriteSingle(float value)
+        => Write(BitConverter.GetBytes(value));
+
     public void Align(int alignment)
     {
         var mod = _writer.BaseStream.Position % alignment;
@@ -56,6 +59,26 @@ class EndiannessWriter : IDisposable
     {
         WriteWithoutEndianness(Encoding.UTF8.GetBytes(value));
         WriteWithoutEndianness(_zeroTerminate);
+    }
+
+    public void WriteAlignedString(string value)
+    {
+        WriteInt32(value.Length);
+        WriteWithoutEndianness(Encoding.UTF8.GetBytes(value));
+        //Align(4);
+    }
+
+    public void WritePPtr(PPtr pptr, UInt32 version)
+    {
+        WriteInt32(pptr.m_FileID);
+        if (version < 14)
+        {
+            WriteInt32((Int32)pptr.m_PathID);
+        }
+        else
+        {
+            WriteInt64(pptr.m_PathID);
+        }
     }
 
     public void WriteBoolean(bool value)
