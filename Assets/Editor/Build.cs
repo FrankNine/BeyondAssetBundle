@@ -1,7 +1,22 @@
 ﻿using System;
+using System.ComponentModel;
 using System.IO;
-using System.Text;
 using UnityEditor;
+
+
+enum Endianness
+{
+    Little = 0,
+    Big    = 1
+}
+
+enum Compression
+{
+    None  = 0,
+    LZMA  = 1,
+    LZ4   = 2,
+    LZ4HC = 3
+}
 
 public class Build  
 {
@@ -17,56 +32,98 @@ public class Build
         );
     }
 
-    private enum Endianness
+   
+
+    public class StorageBlock
     {
-        Little = 0,
-        Big = 1
+        public UInt32 CompressedSize;
+        public UInt32 UncompressedSize;
+        public UInt16 Flags;
     }
+
+    public class Node
+    {
+        public Int64 Offset;
+        public Int64 Size;
+        public UInt32 Flags;
+        public string Path;
+    }
+
+    private const int kArchiveCompressionTypeMask = 0x3F;
 
     [MenuItem("AssetBundle/Build Counterfeit")]
     public static void BuildCounterfeit()
     {
+        var fileEndianness = Endianness.Little;
+
         using (var fileStream = File.Create("Counterfeit/texture"))
         using (var binaryWriter = new BinaryWriter(fileStream))
+        using(var endiannessWriter = new EndiannessWriter(binaryWriter, Endianness.Little))
         {
-            var fileEndianness = Endianness.Little;
-
             string signature = "UnityFS";
-            WriteString(binaryWriter, fileEndianness, signature);
+            endiannessWriter.WriteString(signature);
 
             Int32 versionHead = 6;
-            WriteUInt32(binaryWriter, fileEndianness, versionHead);
+            endiannessWriter.WriteInt32(versionHead);
 
             string unityVersionHead = "5.x.x";
-            WriteString(binaryWriter, fileEndianness, unityVersionHead);
+            endiannessWriter.WriteString(unityVersionHead);
 
             string unityRevision = "2018.4.14f1";
-            WriteString(binaryWriter, fileEndianness, unityRevision);
+            endiannessWriter.WriteString(unityRevision);
 
             Int64 size = 8142;
-            WriteUInt64(binaryWriter, fileEndianness, size);
+            endiannessWriter.WriteInt64(size);
+
+            byte[] uncompressedDataHash = new byte[16] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+            Int32 blocksInfoCount = 1;
+
+            var storageBlock = new StorageBlock
+            {
+                CompressedSize = 8008,
+                UncompressedSize = 8008,
+                Flags = 64
+            };
+
+            Int32 nodeCount = 2;
+
+            var cabNode = new Node
+            {
+                Offset = 0,
+                Size = 4936,
+                Flags = 4,
+                Path = "CAB-f04fab77212e693fb63bdad7458f66fe"
+            };
+
+            var cabResSNode = new Node
+            {
+                Offset = 4936,
+                Size = 3072,
+                Flags = 0,
+                Path = "CAB-f04fab77212e693fb63bdad7458f66fe.resS"
+            };
 
 
             Int32 compressedBlocksInfoSize = 84;
-            WriteUInt32(binaryWriter, fileEndianness, compressedBlocksInfoSize);
+            endiannessWriter.WriteInt32(compressedBlocksInfoSize);
 
             Int32 uncompressedBlocksInfoSize = 153;
-            WriteUInt32(binaryWriter, fileEndianness, uncompressedBlocksInfoSize);
+            endiannessWriter.WriteInt32(uncompressedBlocksInfoSize);
 
             Int32 flags = 67;
-            WriteUInt32(binaryWriter, fileEndianness, flags);
+            endiannessWriter.WriteInt32(flags);
 
-            int metadataSize = 165;
-            WriteUInt32(binaryWriter, fileEndianness, metadataSize);
+            UInt32 metadataSize = 165;
+            endiannessWriter.WriteUInt32(metadataSize);
 
-            int fileSize = 4936;
-            WriteUInt32(binaryWriter, fileEndianness, fileSize);
+            UInt32 fileSize = 4936;
+            endiannessWriter.WriteUInt32(fileSize);
 
-            int version = 17;
-            WriteUInt32(binaryWriter, fileEndianness, version);
+            UInt32 version = 17;
+            endiannessWriter.WriteUInt32(version);
 
-            int dataOffset = 4096;
-            WriteUInt32(binaryWriter, fileEndianness, dataOffset);
+            UInt32 dataOffset = 4096;
+            endiannessWriter.WriteUInt32(dataOffset);
 
             byte endianness = (byte)fileEndianness;
             binaryWriter.Write(endianness);
@@ -75,34 +132,7 @@ public class Build
             binaryWriter.Write(reserved);
 
             string unityVersion = "2018.4.14f1\n2";
-            WriteString(binaryWriter, fileEndianness, unityVersion);
+            endiannessWriter.WriteString(unityVersion);
         }
-    }
-
-    private static void WriteUInt32(BinaryWriter writer, Endianness endianness, Int32 value)
-    {
-        var bytes = BitConverter.GetBytes(value);
-        if (endianness == Endianness.Little)
-        {
-            Array.Reverse(bytes);
-        }
-        writer.Write(bytes);
-    }
-
-    private static void WriteUInt64(BinaryWriter writer, Endianness endianness, Int64 value)
-    {
-        var bytes = BitConverter.GetBytes(value);
-        if (endianness == Endianness.Little)
-        {
-            Array.Reverse(bytes);
-        }
-        writer.Write(bytes);
-    }
-
-    private static void WriteString(BinaryWriter writer, Endianness endianness, string value)
-    {
-        const byte zero = 0;
-        writer.Write(Encoding.UTF8.GetBytes(value));
-        writer.Write(zero);
     }
 }
