@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Linq;
 using System.Text;
 
 class EndiannessWriter : IDisposable
@@ -7,12 +8,12 @@ class EndiannessWriter : IDisposable
     private readonly byte[] _zeroTerminate = { 0 };
 
     private BinaryWriter _writer;
-    private readonly Endianness _endianness;
+    public Endianness Endianness;
 
     public EndiannessWriter(BinaryWriter writer, Endianness endianness)
     {
         _writer = writer;
-        _endianness = endianness;
+        Endianness = endianness;
     } 
 
     public void WriteWithoutEndianness(byte[] buffer)
@@ -20,11 +21,14 @@ class EndiannessWriter : IDisposable
 
     public void Write(byte[] buffer)
     {
-        if (_endianness == Endianness.Little)
+        if (Endianness == Endianness.Big)
             Array.Reverse(buffer);
 
         WriteWithoutEndianness(buffer);
     }
+
+    public void WriteInt16(Int16 value)
+        => Write(BitConverter.GetBytes(value));
 
     public void WriteInt32(Int32 value)
         => Write(BitConverter.GetBytes(value));
@@ -41,11 +45,21 @@ class EndiannessWriter : IDisposable
     public void WriteUInt64(UInt64 value)
         => Write(BitConverter.GetBytes(value));
 
+    public void Align(int alignment)
+    {
+        var mod = _writer.BaseStream.Position % alignment;
+        var padding = alignment - mod;
+        WriteWithoutEndianness(Enumerable.Repeat((byte)0, (int)padding).ToArray());
+    }
+
     public void WriteString(string value)
     {
         WriteWithoutEndianness(Encoding.UTF8.GetBytes(value));
         WriteWithoutEndianness(_zeroTerminate);
     }
+
+    public void WriteBoolean(bool value)
+        => Write(BitConverter.GetBytes(value));
 
     public void Dispose()
     {
