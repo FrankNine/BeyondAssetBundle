@@ -135,8 +135,12 @@ class EndiannessWriter : IDisposable
     public void Align(int alignment)
     {
         var mod = _writer.BaseStream.Position % alignment;
-        var padding = alignment - mod;
-        WriteWithoutEndianness(Enumerable.Repeat((byte)0, (int)padding).ToArray());
+
+        if (mod != 0)
+        {
+            var padding = alignment - mod;
+            WriteWithoutEndianness(Enumerable.Repeat((byte)0, (int)padding).ToArray());
+        }
     }
 
     public void WriteString(string value)
