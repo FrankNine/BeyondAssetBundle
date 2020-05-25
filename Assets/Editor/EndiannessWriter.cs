@@ -88,6 +88,49 @@ class EndiannessWriter : IDisposable
         WriteVector3(value.Extent);
     }
 
+    public void WriteMatrix4x4(Matrix4x4 value)
+    {
+        WriteSingle(value.M00);
+        WriteSingle(value.M10);
+        WriteSingle(value.M20);
+        WriteSingle(value.M30);
+
+        WriteSingle(value.M01);
+        WriteSingle(value.M11);
+        WriteSingle(value.M21);
+        WriteSingle(value.M31);
+
+        WriteSingle(value.M02);
+        WriteSingle(value.M12);
+        WriteSingle(value.M22);
+        WriteSingle(value.M32);
+
+        WriteSingle(value.M03);
+        WriteSingle(value.M13);
+        WriteSingle(value.M23);
+        WriteSingle(value.M33);
+    }
+
+    public void WriteVector2Array(Vector2[] value)
+    {
+        WriteInt32(value.Length);
+        foreach (var v in value)
+            WriteVector2(v);
+    }
+
+    public void WriteMatrixArray(Matrix4x4[] value)
+    {
+        WriteInt32(value.Length);
+        foreach(var v in value) 
+            WriteMatrix4x4(v);
+    }
+
+    public void WritePPtrArray(PPtr[] value, UInt32 version)
+    {
+        WriteInt32(value.Length);
+        foreach (var v in value)
+            WritePPtr(v, version);
+    }
 
     public void Align(int alignment)
     {
@@ -117,6 +160,13 @@ class EndiannessWriter : IDisposable
             WriteInt32((Int32)pptr.m_PathID);
         else
             WriteInt64(pptr.m_PathID);
+    }
+
+    public void WriteAssetInfo(AssetInfo value, UInt32 version)
+    {
+        WriteInt32(value.preloadIndex);
+        WriteInt32(value.preloadSize);
+        WritePPtr(value.asset, version);
     }
 
     public void WriteBoolean(bool value)

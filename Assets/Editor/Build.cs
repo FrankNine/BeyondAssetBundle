@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-
+using System.Runtime.InteropServices;
 using UnityEditor;
 
 using K4os.Compression.LZ4;
@@ -74,6 +74,13 @@ class SpriteRenderData
     public byte[] m_IndexBuffer;
     public VertexData m_VertexData;
     public byte[] m_DataSize;
+    public Matrix4x4[] bindpose;
+    public Rect textureRect;
+    public Vector2 textureRectOffset;
+    public Vector2 atlasRectOffset;
+    public UInt32 spriteSettingsRaw;
+    public Vector4 uvTransform;
+    public float downscaleMultiplier;
 }
 
 public class VertexData
@@ -222,6 +229,30 @@ public class Vector4
     public float Y;
     public float Z;
     public float W;
+}
+
+[StructLayout(LayoutKind.Sequential, Pack = 4)]
+public struct Matrix4x4
+{
+    public float M00;
+    public float M10;
+    public float M20;
+    public float M30;
+
+    public float M01;
+    public float M11;
+    public float M21;
+    public float M31;
+
+    public float M02;
+    public float M12;
+    public float M22;
+    public float M32;
+
+    public float M03;
+    public float M13;
+    public float M23;
+    public float M33;
 }
 
 public class Build  
@@ -675,7 +706,14 @@ public class Build
                     153, 153, 201, 191, 153, 153, 201, 63, 0, 0, 0, 0, 153, 153, 201, 63, 153, 153, 201, 191, 0, 0, 0,
                     0, 153, 153, 201, 63, 153, 153, 201, 63, 0, 0, 0, 0, 153, 153, 201, 191, 153, 153, 201, 191, 0, 0,
                     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-                }
+                },
+                bindpose = new Matrix4x4[0],
+                textureRect = new Rect { X = 0, Y = 0, Width = 32, Height = 32 },
+                textureRectOffset = new Vector2 { X = 0, Y = 0 },
+                atlasRectOffset = new Vector2 { X = -1, Y = -1 },
+                spriteSettingsRaw = 64,
+                uvTransform = new Vector4 { X = 10.1587305f, Y = 16, Z = 10.1587305f, W = 16 },
+                downscaleMultiplier = 1
             };
 
             endiannessWriter.WritePPtr(spriteRenderData.texture, serializedFileHeader.m_Version);
@@ -708,6 +746,307 @@ public class Build
 
             endiannessWriter.WriteInt32(spriteRenderData.m_DataSize.Length);
             endiannessWriter.Write(spriteRenderData.m_DataSize);
+            
+            endiannessWriter.WriteMatrixArray(spriteRenderData.bindpose);
+            endiannessWriter.WriteRect(spriteRenderData.textureRect);
+            endiannessWriter.WriteVector2(spriteRenderData.textureRectOffset);
+            endiannessWriter.WriteVector2(spriteRenderData.atlasRectOffset);
+            endiannessWriter.WriteUInt32(spriteRenderData.spriteSettingsRaw);
+            endiannessWriter.WriteVector4(spriteRenderData.uvTransform);
+            endiannessWriter.WriteSingle(spriteRenderData.downscaleMultiplier);
+
+            Vector2[][] physicsShapeSize = new Vector2[][]
+            {
+                new Vector2[]
+                {
+                    new Vector2 {X = -1.57499993f, Y = 1.57499993f},
+                    new Vector2 {X = -1.57499993f, Y = -1.57499993f},
+                    new Vector2 {X = 1.57499993f, Y = -1.57499993f},
+                    new Vector2 {X = 1.57499993f, Y = 1.57499993f},
+                }
+            };
+
+            endiannessWriter.WriteInt32(physicsShapeSize.Length);
+            foreach (var p in physicsShapeSize)
+            {
+                endiannessWriter.WriteVector2Array(p);
+            }
+
+
+            // TODO
+            endiannessWriter.WriteUInt32(0);
+
+            // AssetBundle
+            endiannessWriter.WriteAlignedString("texture");
+
+            // TODO
+            endiannessWriter.Write(new[] {(byte) 0});
+
+            var assetBundle = new AssetBundle
+            {
+                PreloadTable = new[]
+                {
+                    new PPtr {m_FileID = 0, m_PathID = -6905533648910529366},
+                    new PPtr {m_FileID = 0, m_PathID = 6597701691304967057}
+                },
+                Container = new KeyValuePair<string, AssetInfo>[]
+                {
+                    new KeyValuePair<string, AssetInfo>
+                    (
+                        "assets/turtle.jpg", 
+                        new AssetInfo
+                        {
+                            preloadIndex = 0,
+                            preloadSize = 2,
+                            asset = new PPtr
+                            {
+                                m_FileID = 0,
+                                m_PathID = 6597701691304967057
+                            }
+                        }
+                    ),
+                    new KeyValuePair<string, AssetInfo>
+                    (
+                        "assets/turtle.jpg",
+                        new AssetInfo
+                        {
+                            preloadIndex = 0,
+                            preloadSize = 2,
+                            asset = new PPtr
+                            {
+                                m_FileID = 0,
+                                m_PathID = -6905533648910529366
+                            }
+                        }
+                    ),
+                }
+            };
+            endiannessWriter.WritePPtrArray(assetBundle.PreloadTable, serializedFileHeader.m_Version);
+            endiannessWriter.WriteInt32(assetBundle.Container.Length);
+            foreach (var c in assetBundle.Container)
+            {
+                endiannessWriter.WriteAlignedString(c.Key);
+                // TODO
+                endiannessWriter.Write(new byte[] { 0, 0, 0 });
+                endiannessWriter.WriteAssetInfo(c.Value, serializedFileHeader.m_Version);
+            }
+
+            // TODO
+            endiannessWriter.WriteWithoutEndianness
+            (
+                new byte[]
+                {
+                    00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00,
+                    00, 00, 00, 00, 00, 00, 0x01, 00, 00, 00, 0x07, 00, 00, 00, 0x74, 0x65,
+                    0x78, 0x74, 0x75, 0x72, 0x65, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00,
+                    00, 00, 0x07, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00
+                }
+            );
+
+            var texture2D = new Texture2D
+            {
+                Name = "Turtle",
+
+                m_ForcedFallbackFormat = 4,
+                m_DownscaleFallback = false,
+
+                Width = 32,
+                Height = 32,
+
+                textureFormat  = TextureFormat.RGB24,
+
+                MipCount = 1,
+                IsReadable = false,
+                IsReadAllowed = false,
+                StreamingMipmapsPriority = 0,
+                ImageCount = 1,
+                TextureDimension = 2,
+                textureSettings = new GLTextureSettings
+                {
+                    m_FilterMode = 1,
+                    m_Aniso = 1,
+                    m_MipBias = 0,
+                    m_WrapMode = 1,
+                    m_WrapV = 1,
+                    m_WrapW = 0
+                },
+                m_LightmapFormat = 6,
+                m_ColorSpace = 1,
+                image_data_size = 0,
+                m_StreamData = new StreamingInfo
+                {
+                    offset = 0,
+                    size = 3072,
+                    path = "archive:/CAB-f04fab77212e693fb63bdad7458f66fe/CAB-f04fab77212e693fb63bdad7458f66fe.resS"
+                }
+            };
+
+            endiannessWriter.WriteAlignedString(texture2D.Name);
+
+            // TODO
+            endiannessWriter.Write(new byte[2] { 0, 0 });
+
+            endiannessWriter.WriteInt32(texture2D.m_ForcedFallbackFormat);
+            endiannessWriter.WriteBoolean(texture2D.m_DownscaleFallback);
+
+            // TODO
+            endiannessWriter.Write(new byte[3] { 0, 0, 0 });
+
+            endiannessWriter.WriteInt32(texture2D.Width);
+            endiannessWriter.WriteInt32(texture2D.Height);
+            endiannessWriter.WriteInt32(3072);
+            endiannessWriter.WriteInt32((Int32)texture2D.textureFormat);
+            endiannessWriter.WriteInt32(texture2D.MipCount);
+            endiannessWriter.WriteBoolean(texture2D.IsReadable);
+            endiannessWriter.WriteBoolean(texture2D.IsReadAllowed);
+            //endiannessWriter.Align();
+            // TODO
+            endiannessWriter.Write(new byte[2] { 0, 0 });
+
+            endiannessWriter.WriteInt32(texture2D.StreamingMipmapsPriority);
+            endiannessWriter.WriteInt32(texture2D.ImageCount);
+            endiannessWriter.WriteInt32(texture2D.TextureDimension);
+
+            endiannessWriter.WriteInt32(texture2D.textureSettings.m_FilterMode);
+            endiannessWriter.WriteInt32(texture2D.textureSettings.m_Aniso);
+            endiannessWriter.WriteSingle(texture2D.textureSettings.m_MipBias);
+            endiannessWriter.WriteInt32(texture2D.textureSettings.m_WrapMode);
+            endiannessWriter.WriteInt32(texture2D.textureSettings.m_WrapV);
+            endiannessWriter.WriteInt32(texture2D.textureSettings.m_WrapW);
+
+            endiannessWriter.WriteInt32(texture2D.m_LightmapFormat);
+            endiannessWriter.WriteInt32(texture2D.m_ColorSpace);
+            endiannessWriter.WriteInt32(texture2D.image_data_size);
+
+            endiannessWriter.WriteUInt32(texture2D.m_StreamData.offset);
+            endiannessWriter.WriteUInt32(texture2D.m_StreamData.size);
+            endiannessWriter.WriteAlignedString(texture2D.m_StreamData.path);
+
+            // TODO
+            endiannessWriter.Write(new byte[1] { 0});
+            binaryWriter.Write(AssetDatabase.LoadAssetAtPath<UnityEngine.Texture2D>("Assets/Turtle.jpg").GetRawTextureData());
         }
     }
+
+
+}
+
+class AssetBundle
+{
+    public PPtr[] PreloadTable;
+    public KeyValuePair<string, AssetInfo>[] Container;
+}
+
+class AssetInfo
+{
+    public int preloadIndex;
+    public int preloadSize;
+    public PPtr asset;
+}
+
+class Texture2D
+{
+    public string Name;
+
+    public int m_ForcedFallbackFormat;
+    public bool m_DownscaleFallback;
+
+    public int Width;
+    public int Height;
+    public TextureFormat textureFormat;
+    public int MipCount;
+    public bool IsReadable;
+    public bool IsReadAllowed;
+    public int StreamingMipmapsPriority;
+    public int ImageCount;
+    public int TextureDimension;
+    public GLTextureSettings textureSettings;
+    public int m_LightmapFormat;
+    public int m_ColorSpace;
+    public int image_data_size;
+    public StreamingInfo m_StreamData;
+}
+
+public class GLTextureSettings
+{
+    public int m_FilterMode;
+    public int m_Aniso;
+    public float m_MipBias;
+    public int m_WrapMode;
+    public int m_WrapV;
+    public int m_WrapW;
+}
+
+public class StreamingInfo
+{
+    public uint offset;
+    public uint size;
+    public string path;
+}
+
+enum TextureFormat
+{
+    Alpha8 = 1,
+    ARGB4444,
+    RGB24,
+    RGBA32,
+    ARGB32,
+    RGB565 = 7,
+    R16    = 9,
+    DXT1,
+    DXT5 = 12,
+    RGBA4444,
+    BGRA32,
+    RHalf,
+    RGHalf,
+    RGBAHalf,
+    RFloat,
+    RGFloat,
+    RGBAFloat,
+    YUY2,
+    RGB9e5Float,
+    BC4 = 26,
+    BC5,
+    BC6H = 24,
+    BC7,
+    DXT1Crunched = 28,
+    DXT5Crunched,
+    PVRTC_RGB2,
+    PVRTC_RGBA2,
+    PVRTC_RGB4,
+    PVRTC_RGBA4,
+    ETC_RGB4,
+    ATC_RGB4,
+    ATC_RGBA8,
+    EAC_R = 41,
+    EAC_R_SIGNED,
+    EAC_RG,
+    EAC_RG_SIGNED,
+    ETC2_RGB,
+    ETC2_RGBA1,
+    ETC2_RGBA8,
+    ASTC_RGB_4x4,
+    ASTC_RGB_5x5,
+    ASTC_RGB_6x6,
+    ASTC_RGB_8x8,
+    ASTC_RGB_10x10,
+    ASTC_RGB_12x12,
+    ASTC_RGBA_4x4,
+    ASTC_RGBA_5x5,
+    ASTC_RGBA_6x6,
+    ASTC_RGBA_8x8,
+    ASTC_RGBA_10x10,
+    ASTC_RGBA_12x12,
+    ETC_RGB4_3DS,
+    ETC_RGBA8_3DS,
+    RG16,
+    R8,
+    ETC_RGB4Crunched,
+    ETC2_RGBA8Crunched,
+    ASTC_HDR_4x4,
+    ASTC_HDR_5x5,
+    ASTC_HDR_6x6,
+    ASTC_HDR_8x8,
+    ASTC_HDR_10x10,
+    ASTC_HDR_12x12,
 }
