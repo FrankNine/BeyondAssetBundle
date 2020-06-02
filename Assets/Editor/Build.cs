@@ -493,6 +493,8 @@ public class Build
             string userInformation = "";
             endiannessWriter.WriteString(userInformation);
 
+            
+
             // TODO
             endiannessWriter.Align((int)serializedFileHeader.m_DataOffset + 134);
             endiannessWriter.WriteAlignedString("Turtle");
