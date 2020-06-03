@@ -1,10 +1,16 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
+using System.Text;
+using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.InteropServices;
+
+using UnityEngine;
 using UnityEditor;
 
 using K4os.Compression.LZ4;
+using YamlDotNet.Core.Tokens;
+using YamlDotNet.RepresentationModel;
 
 public enum BuildTarget
 {
@@ -285,6 +291,11 @@ class AssetBundle
     public AssetInfo MainAsset;
     public UInt32 RuntimeCompatibility;
     public string AssetBundleName;
+    public string[] DependencyAssetBundleNames;
+    public bool IsStreamedSceneAssetBundle;
+    public Int32 ExplicitDataLayout;
+    public Int32 PathFlags;
+    public Dictionary<string, string> SceneHashes;
 }
 
 class PPtr
@@ -428,14 +439,34 @@ public class Build
             endiannessWriter.WriteAssetInfo(container.Value, serializationVersion);
         }
 
-        //TODO
         endiannessWriter.WriteAssetInfo(assetBundle.MainAsset, serializationVersion);
 
         endiannessWriter.WriteUInt32(assetBundle.RuntimeCompatibility);
+
         endiannessWriter.WriteAlignedString(assetBundle.AssetBundleName);
+        endiannessWriter.WriteInt32(assetBundle.DependencyAssetBundleNames.Length);
+        foreach (var dependencyAssetBundleName in assetBundle.DependencyAssetBundleNames)
+        {
+            endiannessWriter.WriteAlignedString(dependencyAssetBundleName);
+        }
+        
+        endiannessWriter.WriteBoolean(assetBundle.IsStreamedSceneAssetBundle);
+        endiannessWriter.Align(4);
+        endiannessWriter.WriteInt32(assetBundle.ExplicitDataLayout);
+        endiannessWriter.WriteInt32(assetBundle.PathFlags);
+
+        endiannessWriter.WriteInt32(assetBundle.SceneHashes.Count);
+        foreach (var sceneHash in assetBundle.SceneHashes)
+        {
+            endiannessWriter.WriteString(sceneHash.Key);
+            endiannessWriter.WriteString(sceneHash.Value);
+        }
+
+        // TODO
+        endiannessWriter.WriteUInt32(0);
     }
 
-    private static void _WriteTexture
+    private static void _WriteTexture2D
     (
         EndiannessWriter endiannessWriter,
         Texture2D texture2D
@@ -443,124 +474,162 @@ public class Build
     {
         endiannessWriter.WriteAlignedString(texture2D.Name);
 
-        // TODO
-        endiannessWriter.Write(new byte[2] {0, 0});
-
-        endiannessWriter.WriteInt32(texture2D.m_ForcedFallbackFormat);
-        endiannessWriter.WriteBoolean(texture2D.m_DownscaleFallback);
-
-        // TODO
-        endiannessWriter.Write(new byte[3] {0, 0, 0});
+        endiannessWriter.WriteInt32(texture2D.ForcedFallbackFormat);
+        endiannessWriter.WriteBoolean(texture2D.DownscaleFallback);
+        endiannessWriter.Align(4);
 
         endiannessWriter.WriteInt32(texture2D.Width);
         endiannessWriter.WriteInt32(texture2D.Height);
-        endiannessWriter.WriteInt32(3072);
-        endiannessWriter.WriteInt32((Int32) texture2D.textureFormat);
+        endiannessWriter.WriteInt32(texture2D.CompleteImageSize);
+        endiannessWriter.WriteInt32((Int32) texture2D.TextureFormat);
         endiannessWriter.WriteInt32(texture2D.MipCount);
+
         endiannessWriter.WriteBoolean(texture2D.IsReadable);
         endiannessWriter.WriteBoolean(texture2D.IsReadAllowed);
-        //endiannessWriter.Align();
-        // TODO
-        endiannessWriter.Write(new byte[2] {0, 0});
+        endiannessWriter.Align(4);
 
         endiannessWriter.WriteInt32(texture2D.StreamingMipmapsPriority);
         endiannessWriter.WriteInt32(texture2D.ImageCount);
         endiannessWriter.WriteInt32(texture2D.TextureDimension);
 
-        endiannessWriter.WriteInt32(texture2D.textureSettings.m_FilterMode);
-        endiannessWriter.WriteInt32(texture2D.textureSettings.m_Aniso);
-        endiannessWriter.WriteSingle(texture2D.textureSettings.m_MipBias);
-        endiannessWriter.WriteInt32(texture2D.textureSettings.m_WrapMode);
-        endiannessWriter.WriteInt32(texture2D.textureSettings.m_WrapV);
-        endiannessWriter.WriteInt32(texture2D.textureSettings.m_WrapW);
+        endiannessWriter.WriteInt32(texture2D.TextureSettings.FilterMode);
+        endiannessWriter.WriteInt32(texture2D.TextureSettings.Aniso);
+        endiannessWriter.WriteSingle(texture2D.TextureSettings.MipBias);
+        endiannessWriter.WriteInt32(texture2D.TextureSettings.WrapMode);
+        endiannessWriter.WriteInt32(texture2D.TextureSettings.WrapV);
+        endiannessWriter.WriteInt32(texture2D.TextureSettings.WrapW);
 
-        endiannessWriter.WriteInt32(texture2D.m_LightmapFormat);
-        endiannessWriter.WriteInt32(texture2D.m_ColorSpace);
-        endiannessWriter.WriteInt32(texture2D.image_data_size);
+        endiannessWriter.WriteInt32(texture2D.LightmapFormat);
+        endiannessWriter.WriteInt32(texture2D.ColorSpace);
+        endiannessWriter.WriteInt32(texture2D.ImageDataSize);
 
-        endiannessWriter.WriteUInt32(texture2D.m_StreamData.offset);
-        endiannessWriter.WriteUInt32(texture2D.m_StreamData.size);
-        endiannessWriter.WriteAlignedString(texture2D.m_StreamData.path);
+        endiannessWriter.WriteUInt32(texture2D.StreamData.Offset);
+        endiannessWriter.WriteUInt32(texture2D.StreamData.Size);
+        endiannessWriter.WriteAlignedString(texture2D.StreamData.Path);
+    }
 
-        // TODO
-        endiannessWriter.Write(new byte[1] {0});
+    private static YamlNode _FindYamlChildNode(YamlMappingNode node, string tag)
+    {
+        foreach (var entry in node.Children)
+        {
+            if(((YamlScalarNode)entry.Key).Value == tag)
+            {
+                return entry.Value;
+            }
+        }
+
+        return null;
+    }
+
+    public static string ByteArrayToString(byte[] ba)
+    {
+        return BitConverter.ToString(ba).Replace("-", "");
     }
 
     [MenuItem("AssetBundle/Build Counterfeit")]
     public static void BuildCounterfeit()
     {
+        const string texturePath = "Assets/Turtle.jpg";
+        const string textureMetaPath = texturePath + ".meta";
+
+        var metaContent = new StringReader(File.ReadAllText(textureMetaPath));
+        var yaml = new YamlStream();
+        yaml.Load(metaContent);
+
+        var rootNode = yaml.Documents[0].RootNode;
+        var guidNode = _FindYamlChildNode((YamlMappingNode)rootNode, "guid");
+        string guid = ((YamlScalarNode) guidNode).Value;
+        var textureImporterNode = _FindYamlChildNode((YamlMappingNode)rootNode, "TextureImporter");
+        var assetBundleNameNode = _FindYamlChildNode((YamlMappingNode)textureImporterNode, "assetBundleName");
+        string assetBundleName = ((YamlScalarNode)assetBundleNameNode).Value;
+        string cabFilename = "CAB-" + ByteArrayToString(Md4.Md4Hash(new List<byte>(Encoding.ASCII.GetBytes(assetBundleName)))).ToLower();
+        string cabRessFilename = cabFilename + ".resS";
+        string archivePath = $"archive:/{cabFilename}/{cabRessFilename}";
+
+        // TODO: Replace jpeg loading library
+        var unityTexture2D = AssetDatabase.LoadAssetAtPath<UnityEngine.Texture2D>(texturePath);
+        byte[] textureRawData = unityTexture2D.GetRawTextureData();
+        int width = unityTexture2D.width;
+        int height = unityTexture2D.height;
+
+        var blocksInfoAndDirectory = new BlocksInfoAndDirectory
+        {
+            UncompressedDataHash = new byte[16] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+            StorageBlocks = new[]
+            {
+                new StorageBlock
+                {
+                    CompressedSize = 302100,
+                    UncompressedSize = 302100,
+                    Flags = 64
+                }
+            },
+            Nodes = new[]
+            {
+                new Node
+                {
+                    Offset = 0,
+                    Size = 4424,
+                    Flags = 4,
+                    Path = cabFilename
+                },
+                new Node
+                {
+                    Offset = 4424,
+                    Size = 297676,
+                    Flags = 0,
+                    Path = cabRessFilename
+                }
+            }
+        };
+
+        byte[] compressedBuffer;
+        int uncompressedSize;
+        int compressedSize;
+
+        using (var memoryStream = new MemoryStream())
+        using (var memoryBinaryWriter = new BinaryWriter(memoryStream))
+        using (var endiannessWriterCompressed = new EndiannessWriter(memoryBinaryWriter, Endianness.Big))
+        {
+            _WriteBlocksInfoAndDirectory(endiannessWriterCompressed, blocksInfoAndDirectory);
+
+            byte[] uncompressedBuffer = memoryStream.ToArray();
+            uncompressedSize = uncompressedBuffer.Length;
+            // Assume compressed buffer always smaller than uncompressed
+            compressedBuffer = new byte[uncompressedSize];
+
+            compressedSize = LZ4Codec.Encode
+            (
+                uncompressedBuffer,
+                0,
+                uncompressedSize,
+                compressedBuffer,
+                0,
+                uncompressedSize,
+                LZ4Level.L11_OPT
+            );
+
+            compressedBuffer = compressedBuffer.Take(compressedSize).ToArray();
+        }
+
+        var header = new UnityHeader
+        {
+            Signature = "UnityFS",
+            Version = 6,
+            UnityVersion = "5.x.x",
+            UnityRevision = "2018.4.20f1",
+            Size = 302235,
+            CompressedBlocksInfoSize = compressedSize,
+            UncompressedBlocksInfoSize = uncompressedSize,
+            Flags = 67
+        };
+
         using (var fileStream = File.Create("Counterfeit/texture"))
         using (var binaryWriter = new BinaryWriter(fileStream))
         using (var endiannessWriter = new EndiannessWriter(binaryWriter, Endianness.Big))
         {
-            var header = new UnityHeader
-            {
-                Signature = "UnityFS",
-                Version = 6,
-                UnityVersion = "5.x.x",
-                UnityRevision = "2018.4.20f1",
-                Size = 302235,
-                CompressedBlocksInfoSize = 85,
-                UncompressedBlocksInfoSize = 153,
-                Flags = 67
-            };
-
             _WriteHeader(endiannessWriter, header);
-
-            var blocksInfoAndDirectory = new BlocksInfoAndDirectory
-            {
-                UncompressedDataHash = new byte[16] {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-                StorageBlocks = new[]
-                {
-                    new StorageBlock
-                    {
-                        CompressedSize = 302100,
-                        UncompressedSize = 302100,
-                        Flags = 64
-                    }
-                },
-                Nodes = new[]
-                {
-                    new Node
-                    {
-                        Offset = 0,
-                        Size = 4424,
-                        Flags = 4,
-                        Path = "CAB-f04fab77212e693fb63bdad7458f66fe"
-                    },
-                    new Node
-                    {
-                        Offset = 4424,
-                        Size = 297676,
-                        Flags = 0,
-                        Path = "CAB-f04fab77212e693fb63bdad7458f66fe.resS"
-                    }
-                }
-            };
-
-            {
-                byte[] buffer = new byte[header.UncompressedBlocksInfoSize];
-                using (var memoryStream = new MemoryStream(buffer))
-                using (var memoryBinaryWriter = new BinaryWriter(memoryStream))
-                using (var endiannessWriterCompressed = new EndiannessWriter(memoryBinaryWriter, Endianness.Big))
-                {
-                    _WriteBlocksInfoAndDirectory(endiannessWriterCompressed, blocksInfoAndDirectory);
-                }
-
-                byte[] compressedBuffer = new byte[header.CompressedBlocksInfoSize];
-                LZ4Codec.Encode
-                (
-                    buffer,
-                    0,
-                    header.UncompressedBlocksInfoSize,
-                    compressedBuffer,
-                    0,
-                    header.CompressedBlocksInfoSize,
-                    LZ4Level.L11_OPT
-                );
-
-                endiannessWriter.WriteWithoutEndianness(compressedBuffer);
-            }
+            endiannessWriter.WriteWithoutEndianness(compressedBuffer);
 
             var serializedFileHeader = new SerializedFileHeader
             {
@@ -613,7 +682,7 @@ public class Build
 
             var assetBundle = new AssetBundle
             {
-                Name = "texture",
+                Name = assetBundleName,
                 PreloadTable = new[]
                 {
                     new PPtr {FileID = 0, PathID = 6597701691304967057}
@@ -622,7 +691,7 @@ public class Build
                 {
                     new KeyValuePair<string, AssetInfo>
                     (
-                        "assets/turtle.jpg",
+                        texturePath.ToLower(),
                         new AssetInfo
                         {
                             PreloadIndex = 0,
@@ -646,20 +715,26 @@ public class Build
                     }
                 },
                 RuntimeCompatibility = 1,
-                AssetBundleName = "texture",
+                AssetBundleName = assetBundleName,
+                DependencyAssetBundleNames = new string[0],
+                IsStreamedSceneAssetBundle = false,
+                ExplicitDataLayout = 0,
+                PathFlags = 7,
+                SceneHashes = new Dictionary<string, string>()
             };
 
             var texture2D = new Texture2D
             {
-                Name = "Turtle",
+                Name = Path.GetFileNameWithoutExtension(texturePath),
 
-                m_ForcedFallbackFormat = 4,
-                m_DownscaleFallback = false,
+                ForcedFallbackFormat = (int)TextureFormat.RGBA32,
+                DownscaleFallback = false,
 
-                Width = 32,
-                Height = 32,
+                Width = width,
+                Height = height,
+                CompleteImageSize = textureRawData.Length,
 
-                textureFormat = TextureFormat.RGB24,
+                TextureFormat = TextureFormat.RGB24,
 
                 MipCount = 1,
                 IsReadable = false,
@@ -667,23 +742,23 @@ public class Build
                 StreamingMipmapsPriority = 0,
                 ImageCount = 1,
                 TextureDimension = 2,
-                textureSettings = new GLTextureSettings
+                TextureSettings = new GLTextureSettings
                 {
-                    m_FilterMode = 1,
-                    m_Aniso = 1,
-                    m_MipBias = 0,
-                    m_WrapMode = 1,
-                    m_WrapV = 1,
-                    m_WrapW = 0
+                    FilterMode = 1,
+                    Aniso = 1,
+                    MipBias = 0,
+                    WrapMode = 0,
+                    WrapV = 0,
+                    WrapW = 0
                 },
-                m_LightmapFormat = 6,
-                m_ColorSpace = 1,
-                image_data_size = 0,
-                m_StreamData = new StreamingInfo
+                LightmapFormat = 0,
+                ColorSpace = 1,
+                ImageDataSize = 0,
+                StreamData = new StreamingInfo
                 {
-                    offset = 0,
-                    size = 3072,
-                    path = "archive:/CAB-f04fab77212e693fb63bdad7458f66fe/CAB-f04fab77212e693fb63bdad7458f66fe.resS"
+                    Offset = 0,
+                    Size = (UInt32)textureRawData.Length,
+                    Path = archivePath
                 }
             };
 
@@ -694,24 +769,16 @@ public class Build
                 using (var endiannessWriterStorage = new EndiannessWriter(memoryBinaryWriter, Endianness.Big))
                 {
                     _WriteSerializedFileHeader(endiannessWriterStorage, serializedFileHeader);
-                    endiannessWriterStorage.Align((int)serializedFileHeader.DataOffset);
+                    endiannessWriterStorage.Align((int) serializedFileHeader.DataOffset);
                     _WriteAssetBundle(endiannessWriterStorage, assetBundle, serializedFileHeader.Version);
-                    _WriteTexture(endiannessWriterStorage, texture2D);
+                    _WriteTexture2D(endiannessWriterStorage, texture2D);
+                    endiannessWriterStorage.WriteWithoutEndianness(AssetDatabase.LoadAssetAtPath<UnityEngine.Texture2D>(texturePath).GetRawTextureData());
                 }
 
                 endiannessWriter.WriteWithoutEndianness(buffer);
             }
-
-            
-
-            
-
-           
-            binaryWriter.Write(AssetDatabase.LoadAssetAtPath<UnityEngine.Texture2D>("Assets/Turtle.jpg").GetRawTextureData());
         }
     }
-
-
 }
 
 
@@ -720,40 +787,46 @@ class Texture2D
 {
     public string Name;
 
-    public int m_ForcedFallbackFormat;
-    public bool m_DownscaleFallback;
+    // Inherit from Texture
+    public Int32 ForcedFallbackFormat;
+    public bool DownscaleFallback;
 
-    public int Width;
-    public int Height;
-    public TextureFormat textureFormat;
-    public int MipCount;
+    public Int32 Width;
+    public Int32 Height;
+    public Int32 CompleteImageSize;
+
+    public TextureFormat TextureFormat;
+
+    public Int32 MipCount;
+
     public bool IsReadable;
     public bool IsReadAllowed;
+
     public int StreamingMipmapsPriority;
     public int ImageCount;
     public int TextureDimension;
-    public GLTextureSettings textureSettings;
-    public int m_LightmapFormat;
-    public int m_ColorSpace;
-    public int image_data_size;
-    public StreamingInfo m_StreamData;
+    public GLTextureSettings TextureSettings;
+    public int LightmapFormat;
+    public int ColorSpace;
+    public int ImageDataSize;
+    public StreamingInfo StreamData;
 }
 
 public class GLTextureSettings
 {
-    public int m_FilterMode;
-    public int m_Aniso;
-    public float m_MipBias;
-    public int m_WrapMode;
-    public int m_WrapV;
-    public int m_WrapW;
+    public Int32 FilterMode;
+    public Int32 Aniso;
+    public float MipBias;
+    public Int32 WrapMode;
+    public Int32 WrapV;
+    public Int32 WrapW;
 }
 
 public class StreamingInfo
 {
-    public uint offset;
-    public uint size;
-    public string path;
+    public uint Offset;
+    public uint Size;
+    public string Path;
 }
 
 enum TextureFormat
