@@ -1,48 +1,13 @@
-﻿using System.Linq;
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Text;
-using UnityEngine;
-using UnityEditor;
-using Debug = System.Diagnostics.Debug;
-
-public class PathIdTest
-{
-    [MenuItem("AssetBundle/PathID")]
-    public static void BuildAssetBundleOptions()
-    {
-        var fileId = new int[] {2800000, 21300000};
-        List<byte>   b = new List<byte>();
-        const string guid = "1bb5f812f4373c143b24d9cdd79303bf";
-
-        b.AddRange(System.Text.Encoding.ASCII.GetBytes(guid));
-        b.AddRange(BitConverter.GetBytes((Int32)3));
-        b.AddRange(BitConverter.GetBytes((Int64)2800000));
-        //b.AddRange(StringToByteArray("00000000005FC608"));
-
-        UnityEngine.Debug.Log(BitConverter.ToString(b.ToArray()).Replace("-", ""));
-
-        var d = Md4.Md4Hash(b);
-        UnityEngine.Debug.Log(BitConverter.ToString(d).Replace("-", ""));
-    }
-
-    public static byte[] StringToByteArray(string hex)
-    {
-        return Enumerable.Range(0, hex.Length)
-                         .Where(x => x % 2 == 0)
-                         .Select(x => Convert.ToByte(hex.Substring(x, 2), 16))
-                         .ToArray();
-    }
-}
-
+using System.Linq;
 
 static class Md4
 {
     public static byte[] Md4Hash(List<byte> bytes)
     {
         // get padded uints from bytes
-        uint       bitCount = (uint) (bytes.Count) * 8;
+        uint bitCount = (uint) (bytes.Count) * 8;
         bytes.Add(128);
         while (bytes.Count % 64 != 56) bytes.Add(0);
         var uints = new List<uint>();
@@ -52,12 +17,12 @@ static class Md4
         uints.Add(0);
 
         // run rounds
-        uint                   a   = 0x67452301, b = 0xefcdab89, c = 0x98badcfe, d = 0x10325476;
+        uint a = 0x67452301, b = 0xefcdab89, c = 0x98badcfe, d = 0x10325476;
         Func<uint, uint, uint> rol = (x, y) => x << (int) y | x >> 32 - (int) y;
         for (int q = 0; q + 15 < uints.Count; q += 16)
         {
-            var  chunk = uints.GetRange(q, 16);
-            uint aa    = a, bb = b, cc = c, dd = d;
+            var chunk = uints.GetRange(q, 16);
+            uint aa = a, bb = b, cc = c, dd = d;
             Action<Func<uint, uint, uint, uint>, uint[]> round = (f, y) =>
             {
                 foreach (uint i in new[] {y[0], y[1], y[2], y[3]})
@@ -78,7 +43,6 @@ static class Md4
             d += dd;
         }
 
-        // return hex encoded string
         return new[] {a, b, c, d}.SelectMany(BitConverter.GetBytes).ToArray();
     }
 }

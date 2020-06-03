@@ -1,15 +1,13 @@
 ﻿using System;
 using System.IO;
 using System.Text;
-using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.InteropServices;
+using System.Collections.Generic;
 
 using UnityEngine;
 using UnityEditor;
 
 using K4os.Compression.LZ4;
-using YamlDotNet.Core.Tokens;
 using YamlDotNet.RepresentationModel;
 
 public enum BuildTarget
@@ -58,155 +56,6 @@ public enum Endianness
     Big    = 1
 }
 
-enum Compression
-{
-    None  = 0,
-    LZMA  = 1,
-    LZ4   = 2,
-    LZ4HC = 3
-}
-
-
-
-class SpriteRenderData
-{
-    public PPtr texture;
-    public PPtr alphaTexture;
-    public SubMesh[] m_SubMeshes;
-    public byte[] m_IndexBuffer;
-    public VertexData m_VertexData;
-    public byte[] m_DataSize;
-    public Matrix4x4[] bindpose;
-    public Rect textureRect;
-    public Vector2 textureRectOffset;
-    public Vector2 atlasRectOffset;
-    public UInt32 spriteSettingsRaw;
-    public Vector4 uvTransform;
-    public float downscaleMultiplier;
-}
-
-public class VertexData
-{
-    public uint          m_CurrentChannels;
-    public uint          m_VertexCount;
-    public ChannelInfo[] m_Channels;
-    public StreamInfo[]  m_Streams;
-    public byte[]        m_DataSize;
-}
-
-public class ChannelInfo
-{
-    public byte stream;
-    public byte offset;
-    public byte format;
-    public byte dimension;
-}
-
-public class StreamInfo
-{
-    public uint   channelMask;
-    public uint   offset;
-    public uint   stride;
-    public uint   align;
-    public byte   dividerOp;
-    public ushort frequency;
-}
-
-public enum GfxPrimitiveType : int
-{
-    kPrimitiveTriangles     = 0,
-    kPrimitiveTriangleStrip = 1,
-    kPrimitiveQuads         = 2,
-    kPrimitiveLines         = 3,
-    kPrimitiveLineStrip     = 4,
-    kPrimitivePoints        = 5,
-};
-
-public class AABB
-{
-    public Vector3 Center;
-    public Vector3 Extent;
-}
-
-public class SubMesh
-{
-    public uint             firstByte;
-    public uint             indexCount;
-    public GfxPrimitiveType topology;
-    public uint             triangleCount;
-    public uint             baseVertex;
-    public uint             firstVertex;
-    public uint             vertexCount;
-    public AABB             localAABB;
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-public class Rect
-{
-    public float X;
-    public float Y;
-    public float Width;
-    public float Height;
-}
-
-public class Vector2
-{
-    public float X;
-    public float Y;
-}
-
-public class Vector3
-{
-    public float X;
-    public float Y;
-    public float Z;
-}
-
-public class Vector4
-{
-    public float X;
-    public float Y;
-    public float Z;
-    public float W;
-}
-
-[StructLayout(LayoutKind.Sequential, Pack = 4)]
-public struct Matrix4x4
-{
-    public float M00;
-    public float M10;
-    public float M20;
-    public float M30;
-
-    public float M01;
-    public float M11;
-    public float M21;
-    public float M31;
-
-    public float M02;
-    public float M12;
-    public float M22;
-    public float M32;
-
-    public float M03;
-    public float M13;
-    public float M23;
-    public float M33;
-}
-
 public class UnityHeader
 {
     public string Signature;
@@ -240,7 +89,6 @@ public class Node
     public UInt32 Flags;
     public string Path;
 }
-
 
 public class SerializedFileHeader
 {
@@ -461,9 +309,6 @@ public class Build
             endiannessWriter.WriteString(sceneHash.Key);
             endiannessWriter.WriteString(sceneHash.Value);
         }
-
-        // TODO
-        endiannessWriter.WriteUInt32(0);
     }
 
     private static void _WriteTexture2D
@@ -521,6 +366,17 @@ public class Build
         return null;
     }
 
+    private static Int64 _GetPathId(string guid, int fileId)
+    {
+        var input = new List<byte>();
+        input.AddRange(Encoding.ASCII.GetBytes(guid));
+        input.AddRange(BitConverter.GetBytes((Int32)3));
+        input.AddRange(BitConverter.GetBytes((Int64)fileId));
+
+        var output = Md4.Md4Hash(input);
+        return BitConverter.ToInt64(output.Take(8).ToArray(), 0);
+    }
+
     public static string ByteArrayToString(byte[] ba)
     {
         return BitConverter.ToString(ba).Replace("-", "");
@@ -551,6 +407,9 @@ public class Build
         byte[] textureRawData = unityTexture2D.GetRawTextureData();
         int width = unityTexture2D.width;
         int height = unityTexture2D.height;
+
+        int textureFileId = 2800000;
+        Int64 texturePathId = _GetPathId(guid, textureFileId);
 
         var blocksInfoAndDirectory = new BlocksInfoAndDirectory
         {
@@ -612,6 +471,176 @@ public class Build
             compressedBuffer = compressedBuffer.Take(compressedSize).ToArray();
         }
 
+        var serializedFileHeader = new SerializedFileHeader
+        {
+            MetadataSize = 125,
+            FileSize = 4424,
+            Version = 17,
+            DataOffset = 4096,
+            Endianness = Endianness.Little,
+            Reserved = new byte[] { 0, 0, 0 },
+            UnityVersion = "2018.4.20f1\n2",
+            BuildTarget = BuildTarget.Android,
+            IsTypeTreeEnabled = false,
+            SerializedTypes = new[]
+            {
+                new SerializedType
+                {
+                    // https://docs.unity3d.com/Manual/ClassIDReference.html
+                    ClassID = 142,
+                    IsStrippedType = false,
+                    ScriptTypeIndex = -1,
+                    OldTypeHash = new byte[]
+                        {151, 218, 95, 70, 136, 228, 90, 87, 200, 180, 45, 79, 66, 73, 114, 151}
+                },
+                new SerializedType
+                {
+                    ClassID = 28,
+                    IsStrippedType = false,
+                    ScriptTypeIndex = -1,
+                    OldTypeHash = new byte[]
+                        {238, 108, 64, 129, 125, 41, 81, 146, 156, 219, 79, 90, 96, 135, 79, 93}
+                }
+            },
+            ObjectInfos = new[]
+            {
+                new ObjectInfo
+                {
+                    PathID = 1,
+                    ByteStart = 0,
+                    ByteSize = 132,
+                    TypeID = 0
+                },
+                new ObjectInfo
+                {
+                    PathID = texturePathId,
+                    ByteStart = 136,
+                    ByteSize = 192,
+                    TypeID = 1
+                }
+            }
+        };
+
+        var assetBundle = new AssetBundle
+        {
+            Name = assetBundleName,
+            PreloadTable = new[]
+               {
+                    new PPtr {FileID = 0, PathID = texturePathId}
+                },
+            Container = new[]
+               {
+                    new KeyValuePair<string, AssetInfo>
+                    (
+                        texturePath.ToLower(),
+                        new AssetInfo
+                        {
+                            PreloadIndex = 0,
+                            PreloadSize = 1,
+                            Asset = new PPtr
+                            {
+                                FileID = 0,
+                                PathID = texturePathId
+                            }
+                        }
+                    )
+                },
+            MainAsset = new AssetInfo
+            {
+                PreloadIndex = 0,
+                PreloadSize = 0,
+                Asset = new PPtr
+                {
+                    FileID = 0,
+                    PathID = 0
+                }
+            },
+            RuntimeCompatibility = 1,
+            AssetBundleName = assetBundleName,
+            DependencyAssetBundleNames = new string[0],
+            IsStreamedSceneAssetBundle = false,
+            ExplicitDataLayout = 0,
+            PathFlags = 7,
+            SceneHashes = new Dictionary<string, string>()
+        };
+
+        var texture2D = new Texture2D
+        {
+            Name = Path.GetFileNameWithoutExtension(texturePath),
+
+            ForcedFallbackFormat = (int)TextureFormat.RGBA32,
+            DownscaleFallback = false,
+
+            Width = width,
+            Height = height,
+            CompleteImageSize = textureRawData.Length,
+
+            TextureFormat = TextureFormat.RGB24,
+
+            MipCount = 1,
+            IsReadable = false,
+            IsReadAllowed = false,
+            StreamingMipmapsPriority = 0,
+            ImageCount = 1,
+            TextureDimension = 2,
+            TextureSettings = new GLTextureSettings
+            {
+                FilterMode = 1,
+                Aniso = 1,
+                MipBias = 0,
+                WrapMode = 0,
+                WrapV = 0,
+                WrapW = 0
+            },
+            LightmapFormat = 0,
+            ColorSpace = 1,
+            ImageDataSize = 0,
+            StreamData = new StreamingInfo
+            {
+                Offset = 0,
+                Size = (UInt32)textureRawData.Length,
+                Path = archivePath
+            }
+        };
+
+        byte[] serializeFileBuffer;
+        int metadataSize;
+        int assetBundleObjectPosition;
+        int assetBundleObjectOffset;
+        int assetBundleObjectSize;
+        int texture2DPosition;
+        int texture2DOffset;
+        int texture2DObjectSize;
+
+        using (var memoryStream = new MemoryStream())
+        using (var memoryBinaryWriter = new BinaryWriter(memoryStream))
+        using (var endiannessWriterStorage = new EndiannessWriter(memoryBinaryWriter, Endianness.Big))
+        {
+            _WriteSerializedFileHeader(endiannessWriterStorage, serializedFileHeader);
+            metadataSize = (Int32)endiannessWriterStorage.Position;
+
+            endiannessWriterStorage.Align((int)serializedFileHeader.DataOffset);
+            assetBundleObjectPosition = (Int32)endiannessWriterStorage.Position;
+            assetBundleObjectOffset = (Int32)(assetBundleObjectPosition - serializedFileHeader.DataOffset);
+            _WriteAssetBundle(endiannessWriterStorage, assetBundle, serializedFileHeader.Version);
+            assetBundleObjectSize = (Int32)(endiannessWriterStorage.Position - assetBundleObjectPosition);
+
+            // TODO: What is this padding?
+            endiannessWriterStorage.WriteUInt32(0);
+
+            texture2DPosition = (Int32)endiannessWriterStorage.Position;
+            texture2DOffset = (Int32)(texture2DPosition - serializedFileHeader.DataOffset);
+            _WriteTexture2D(endiannessWriterStorage, texture2D);
+            texture2DObjectSize = (Int32) (endiannessWriterStorage.Position - texture2DPosition);
+
+            endiannessWriterStorage.WriteWithoutEndianness(textureRawData);
+
+            // TODO: What is this padding?
+            endiannessWriterStorage.Write(0);
+
+            serializeFileBuffer = memoryStream.ToArray();
+        }
+
         var header = new UnityHeader
         {
             Signature = "UnityFS",
@@ -630,153 +659,7 @@ public class Build
         {
             _WriteHeader(endiannessWriter, header);
             endiannessWriter.WriteWithoutEndianness(compressedBuffer);
-
-            var serializedFileHeader = new SerializedFileHeader
-            {
-                MetadataSize = 125,
-                FileSize = 4424,
-                Version = 17,
-                DataOffset = 4096,
-                Endianness = Endianness.Little,
-                Reserved = new byte[] {0, 0, 0},
-                UnityVersion = "2018.4.20f1\n2",
-                BuildTarget = BuildTarget.Android,
-                IsTypeTreeEnabled = false,
-                SerializedTypes = new[]
-                {
-                    new SerializedType
-                    {
-                        ClassID = 142,
-                        IsStrippedType = false,
-                        ScriptTypeIndex = -1,
-                        OldTypeHash = new byte[]
-                            {151, 218, 95, 70, 136, 228, 90, 87, 200, 180, 45, 79, 66, 73, 114, 151}
-                    },
-                    new SerializedType
-                    {
-                        ClassID = 28,
-                        IsStrippedType = false,
-                        ScriptTypeIndex = -1,
-                        OldTypeHash = new byte[]
-                            {238, 108, 64, 129, 125, 41, 81, 146, 156, 219, 79, 90, 96, 135, 79, 93}
-                    }
-                },
-                ObjectInfos = new[]
-                {
-                    new ObjectInfo
-                    {
-                        PathID = 1,
-                        ByteStart = 0,
-                        ByteSize = 132,
-                        TypeID = 0
-                    },
-                    new ObjectInfo
-                    {
-                        PathID = 6597701691304967057,
-                        ByteStart = 136,
-                        ByteSize = 192,
-                        TypeID = 1
-                    }
-                }
-            };
-
-            var assetBundle = new AssetBundle
-            {
-                Name = assetBundleName,
-                PreloadTable = new[]
-                {
-                    new PPtr {FileID = 0, PathID = 6597701691304967057}
-                },
-                Container = new[]
-                {
-                    new KeyValuePair<string, AssetInfo>
-                    (
-                        texturePath.ToLower(),
-                        new AssetInfo
-                        {
-                            PreloadIndex = 0,
-                            PreloadSize = 1,
-                            Asset = new PPtr
-                            {
-                                FileID = 0,
-                                PathID = 6597701691304967057
-                            }
-                        }
-                    )
-                },
-                MainAsset = new AssetInfo
-                {
-                    PreloadIndex = 0,
-                    PreloadSize = 0,
-                    Asset = new PPtr
-                    {
-                        FileID = 0,
-                        PathID = 0
-                    }
-                },
-                RuntimeCompatibility = 1,
-                AssetBundleName = assetBundleName,
-                DependencyAssetBundleNames = new string[0],
-                IsStreamedSceneAssetBundle = false,
-                ExplicitDataLayout = 0,
-                PathFlags = 7,
-                SceneHashes = new Dictionary<string, string>()
-            };
-
-            var texture2D = new Texture2D
-            {
-                Name = Path.GetFileNameWithoutExtension(texturePath),
-
-                ForcedFallbackFormat = (int)TextureFormat.RGBA32,
-                DownscaleFallback = false,
-
-                Width = width,
-                Height = height,
-                CompleteImageSize = textureRawData.Length,
-
-                TextureFormat = TextureFormat.RGB24,
-
-                MipCount = 1,
-                IsReadable = false,
-                IsReadAllowed = false,
-                StreamingMipmapsPriority = 0,
-                ImageCount = 1,
-                TextureDimension = 2,
-                TextureSettings = new GLTextureSettings
-                {
-                    FilterMode = 1,
-                    Aniso = 1,
-                    MipBias = 0,
-                    WrapMode = 0,
-                    WrapV = 0,
-                    WrapW = 0
-                },
-                LightmapFormat = 0,
-                ColorSpace = 1,
-                ImageDataSize = 0,
-                StreamData = new StreamingInfo
-                {
-                    Offset = 0,
-                    Size = (UInt32)textureRawData.Length,
-                    Path = archivePath
-                }
-            };
-
-            {
-                byte[] buffer = new byte[blocksInfoAndDirectory.StorageBlocks[0].UncompressedSize];
-                using (var memoryStream = new MemoryStream(buffer))
-                using (var memoryBinaryWriter = new BinaryWriter(memoryStream))
-                using (var endiannessWriterStorage = new EndiannessWriter(memoryBinaryWriter, Endianness.Big))
-                {
-                    _WriteSerializedFileHeader(endiannessWriterStorage, serializedFileHeader);
-                    endiannessWriterStorage.Align((int) serializedFileHeader.DataOffset);
-                    _WriteAssetBundle(endiannessWriterStorage, assetBundle, serializedFileHeader.Version);
-                    _WriteTexture2D(endiannessWriterStorage, texture2D);
-                    endiannessWriterStorage.WriteWithoutEndianness(AssetDatabase.LoadAssetAtPath<UnityEngine.Texture2D>(texturePath).GetRawTextureData());
-                }
-
-                endiannessWriter.WriteWithoutEndianness(buffer);
-            }
+            endiannessWriter.WriteWithoutEndianness(serializeFileBuffer);
         }
     }
 }
