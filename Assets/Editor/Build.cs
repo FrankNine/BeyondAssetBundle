@@ -60,11 +60,7 @@ enum Compression
     LZ4HC = 3
 }
 
-class PPtr
-{
-    public int  m_FileID;
-    public long m_PathID;
-}
+
 
 class SpriteRenderData
 {
@@ -274,11 +270,24 @@ public class TypeTreeNode
 
 public class ObjectInfo
 {
+    public Int64 PathID;
     public Int64 ByteStart;
     public UInt32 ByteSize;
     public Int32 TypeID;
-    public Int32 ClassID;
-    public Int64 PathID;
+}
+
+
+class AssetBundle
+{
+    public string Name;
+    public PPtr[] PreloadTable;
+    public KeyValuePair<string, AssetInfo>[] Container;
+}
+
+class PPtr
+{
+    public int FileID;
+    public long PathID;
 }
 
 public class Build  
@@ -372,7 +381,7 @@ public class Build
         endiannessWriter.WriteInt32(serializedFileHeader.ObjectInfos.Length);
         foreach (var objectInfo in serializedFileHeader.ObjectInfos)
         {
-            //endiannessWriter.Align(4);
+            endiannessWriter.Align(4);
             endiannessWriter.WriteInt64(objectInfo.PathID);
             endiannessWriter.WriteInt32((Int32)objectInfo.ByteStart);
             endiannessWriter.WriteUInt32(objectInfo.ByteSize);
@@ -389,6 +398,76 @@ public class Build
 
         string userInformation = "";
         endiannessWriter.WriteString(userInformation);
+    }
+
+
+    private static void _WriteAssetBundle
+    (
+        EndiannessWriter endiannessWriter,
+        AssetBundle assetBundle,
+        UInt32 serializationVersion
+    )
+    {
+        endiannessWriter.WriteAlignedString(assetBundle.Name);
+
+        endiannessWriter.WritePPtrArray(assetBundle.PreloadTable, serializationVersion);
+        endiannessWriter.WriteInt32(assetBundle.Container.Length);
+        foreach (var container in assetBundle.Container)
+        {
+            endiannessWriter.WriteAlignedString(container.Key);
+            endiannessWriter.WriteAssetInfo(container.Value, serializationVersion);
+        }
+    }
+
+    private static void _WriteTexture
+    (
+        EndiannessWriter endiannessWriter,
+        Texture2D texture2D
+    )
+    {
+        endiannessWriter.WriteAlignedString(texture2D.Name);
+
+        // TODO
+        endiannessWriter.Write(new byte[2] {0, 0});
+
+        endiannessWriter.WriteInt32(texture2D.m_ForcedFallbackFormat);
+        endiannessWriter.WriteBoolean(texture2D.m_DownscaleFallback);
+
+        // TODO
+        endiannessWriter.Write(new byte[3] {0, 0, 0});
+
+        endiannessWriter.WriteInt32(texture2D.Width);
+        endiannessWriter.WriteInt32(texture2D.Height);
+        endiannessWriter.WriteInt32(3072);
+        endiannessWriter.WriteInt32((Int32) texture2D.textureFormat);
+        endiannessWriter.WriteInt32(texture2D.MipCount);
+        endiannessWriter.WriteBoolean(texture2D.IsReadable);
+        endiannessWriter.WriteBoolean(texture2D.IsReadAllowed);
+        //endiannessWriter.Align();
+        // TODO
+        endiannessWriter.Write(new byte[2] {0, 0});
+
+        endiannessWriter.WriteInt32(texture2D.StreamingMipmapsPriority);
+        endiannessWriter.WriteInt32(texture2D.ImageCount);
+        endiannessWriter.WriteInt32(texture2D.TextureDimension);
+
+        endiannessWriter.WriteInt32(texture2D.textureSettings.m_FilterMode);
+        endiannessWriter.WriteInt32(texture2D.textureSettings.m_Aniso);
+        endiannessWriter.WriteSingle(texture2D.textureSettings.m_MipBias);
+        endiannessWriter.WriteInt32(texture2D.textureSettings.m_WrapMode);
+        endiannessWriter.WriteInt32(texture2D.textureSettings.m_WrapV);
+        endiannessWriter.WriteInt32(texture2D.textureSettings.m_WrapW);
+
+        endiannessWriter.WriteInt32(texture2D.m_LightmapFormat);
+        endiannessWriter.WriteInt32(texture2D.m_ColorSpace);
+        endiannessWriter.WriteInt32(texture2D.image_data_size);
+
+        endiannessWriter.WriteUInt32(texture2D.m_StreamData.offset);
+        endiannessWriter.WriteUInt32(texture2D.m_StreamData.size);
+        endiannessWriter.WriteAlignedString(texture2D.m_StreamData.path);
+
+        // TODO
+        endiannessWriter.Write(new byte[1] {0});
     }
 
     [MenuItem("AssetBundle/Build Counterfeit")]
@@ -443,29 +522,29 @@ public class Build
                 }
             };
 
-            // ReadBlocksInfoAndDirectory
-            byte[] buffer = new byte[header.UncompressedBlocksInfoSize];
-            using (var stream = new MemoryStream(buffer))
-            using (var binaryWriter2 = new BinaryWriter(stream))
-            using (var endiannessWriterCompressed = new EndiannessWriter(binaryWriter2, Endianness.Big))
             {
-                _WriteBlocksInfoAndDirectory(endiannessWriterCompressed, blocksInfoAndDirectory);
+                byte[] buffer = new byte[header.UncompressedBlocksInfoSize];
+                using (var memoryStream = new MemoryStream(buffer))
+                using (var memoryBinaryWriter = new BinaryWriter(memoryStream))
+                using (var endiannessWriterCompressed = new EndiannessWriter(memoryBinaryWriter, Endianness.Big))
+                {
+                    _WriteBlocksInfoAndDirectory(endiannessWriterCompressed, blocksInfoAndDirectory);
+                }
+
+                byte[] compressedBuffer = new byte[header.CompressedBlocksInfoSize];
+                LZ4Codec.Encode
+                (
+                    buffer,
+                    0,
+                    header.UncompressedBlocksInfoSize,
+                    compressedBuffer,
+                    0,
+                    header.CompressedBlocksInfoSize,
+                    LZ4Level.L11_OPT
+                );
+
+                endiannessWriter.WriteWithoutEndianness(compressedBuffer);
             }
-
-            byte[] compressedBuffer = new byte[header.CompressedBlocksInfoSize];
-            LZ4Codec.Encode
-            (
-                buffer, 
-                0, 
-                header.UncompressedBlocksInfoSize, 
-                compressedBuffer, 
-                0, 
-                header.CompressedBlocksInfoSize,
-                LZ4Level.L11_OPT
-            );
-
-            endiannessWriter.WriteWithoutEndianness(compressedBuffer);
-
 
             var serializedFileHeader = new SerializedFileHeader
             {
@@ -474,7 +553,7 @@ public class Build
                 Version = 17,
                 DataOffset = 4096,
                 Endianness = Endianness.Little,
-                Reserved = new byte[] { 0, 0, 0 },
+                Reserved = new byte[] {0, 0, 0},
                 UnityVersion = "2018.4.20f1\n2",
                 BuildTarget = BuildTarget.Android,
                 IsTypeTreeEnabled = false,
@@ -502,95 +581,45 @@ public class Build
                     new ObjectInfo
                     {
                         PathID = 1,
-                        ByteStart = 456,
-                        ByteSize = 188,
-                        TypeID = 1
+                        ByteStart = 0,
+                        ByteSize = 132,
+                        TypeID = 0
                     },
                     new ObjectInfo
                     {
                         PathID = 6597701691304967057,
-                        ByteStart = 648,
+                        ByteStart = 136,
                         ByteSize = 192,
-                        TypeID = 2
+                        TypeID = 1
                     }
                 }
             };
 
-            _WriteSerializedFileHeader(endiannessWriter, serializedFileHeader);
-
-
-            // TODO
-            endiannessWriter.Align((int)serializedFileHeader.DataOffset + 134);
-         
-            // TODO
-            endiannessWriter.WriteUInt32(0);
-
-            // AssetBundle
-            endiannessWriter.WriteAlignedString("texture");
-
-            // TODO
-            endiannessWriter.Write(new[] {(byte) 0});
-
             var assetBundle = new AssetBundle
             {
+                Name = "texture",
                 PreloadTable = new[]
                 {
-                    new PPtr {m_FileID = 0, m_PathID = -6905533648910529366},
-                    new PPtr {m_FileID = 0, m_PathID = 6597701691304967057}
+                    new PPtr {FileID = 0, PathID = 6597701691304967057}
                 },
-                Container = new KeyValuePair<string, AssetInfo>[]
+                Container = new[]
                 {
-                    new KeyValuePair<string, AssetInfo>
-                    (
-                        "assets/turtle.jpg", 
-                        new AssetInfo
-                        {
-                            preloadIndex = 0,
-                            preloadSize = 2,
-                            asset = new PPtr
-                            {
-                                m_FileID = 0,
-                                m_PathID = 6597701691304967057
-                            }
-                        }
-                    ),
                     new KeyValuePair<string, AssetInfo>
                     (
                         "assets/turtle.jpg",
                         new AssetInfo
                         {
                             preloadIndex = 0,
-                            preloadSize = 2,
+                            preloadSize = 1,
                             asset = new PPtr
                             {
-                                m_FileID = 0,
-                                m_PathID = -6905533648910529366
+                                FileID = 0,
+                                PathID = 6597701691304967057
                             }
                         }
-                    ),
+                    )
                 }
             };
-            endiannessWriter.WritePPtrArray(assetBundle.PreloadTable, serializedFileHeader.Version);
-            endiannessWriter.WriteInt32(assetBundle.Container.Length);
-            foreach (var c in assetBundle.Container)
-            {
-                endiannessWriter.WriteAlignedString(c.Key);
-                // TODO
-                endiannessWriter.Write(new byte[] { 0, 0, 0 });
-                endiannessWriter.WriteAssetInfo(c.Value, serializedFileHeader.Version);
-            }
-
-            // TODO
-            endiannessWriter.WriteWithoutEndianness
-            (
-                new byte[]
-                {
-                    00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00,
-                    00, 00, 00, 00, 00, 00, 0x01, 00, 00, 00, 0x07, 00, 00, 00, 0x74, 0x65,
-                    0x78, 0x74, 0x75, 0x72, 0x65, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00,
-                    00, 00, 0x07, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00
-                }
-            );
 
             var texture2D = new Texture2D
             {
@@ -602,7 +631,7 @@ public class Build
                 Width = 32,
                 Height = 32,
 
-                textureFormat  = TextureFormat.RGB24,
+                textureFormat = TextureFormat.RGB24,
 
                 MipCount = 1,
                 IsReadable = false,
@@ -630,49 +659,26 @@ public class Build
                 }
             };
 
-            endiannessWriter.WriteAlignedString(texture2D.Name);
+            {
+                byte[] buffer = new byte[blocksInfoAndDirectory.StorageBlocks[0].UncompressedSize];
+                using (var memoryStream = new MemoryStream(buffer))
+                using (var memoryBinaryWriter = new BinaryWriter(memoryStream))
+                using (var endiannessWriterStorage = new EndiannessWriter(memoryBinaryWriter, Endianness.Big))
+                {
+                    _WriteSerializedFileHeader(endiannessWriterStorage, serializedFileHeader);
+                    endiannessWriterStorage.Align((int)serializedFileHeader.DataOffset);
+                    _WriteAssetBundle(endiannessWriterStorage, assetBundle, serializedFileHeader.Version);
+                    _WriteTexture(endiannessWriterStorage, texture2D);
+                }
 
-            // TODO
-            endiannessWriter.Write(new byte[2] { 0, 0 });
+                endiannessWriter.WriteWithoutEndianness(buffer);
+            }
 
-            endiannessWriter.WriteInt32(texture2D.m_ForcedFallbackFormat);
-            endiannessWriter.WriteBoolean(texture2D.m_DownscaleFallback);
+            
 
-            // TODO
-            endiannessWriter.Write(new byte[3] { 0, 0, 0 });
+            
 
-            endiannessWriter.WriteInt32(texture2D.Width);
-            endiannessWriter.WriteInt32(texture2D.Height);
-            endiannessWriter.WriteInt32(3072);
-            endiannessWriter.WriteInt32((Int32)texture2D.textureFormat);
-            endiannessWriter.WriteInt32(texture2D.MipCount);
-            endiannessWriter.WriteBoolean(texture2D.IsReadable);
-            endiannessWriter.WriteBoolean(texture2D.IsReadAllowed);
-            //endiannessWriter.Align();
-            // TODO
-            endiannessWriter.Write(new byte[2] { 0, 0 });
-
-            endiannessWriter.WriteInt32(texture2D.StreamingMipmapsPriority);
-            endiannessWriter.WriteInt32(texture2D.ImageCount);
-            endiannessWriter.WriteInt32(texture2D.TextureDimension);
-
-            endiannessWriter.WriteInt32(texture2D.textureSettings.m_FilterMode);
-            endiannessWriter.WriteInt32(texture2D.textureSettings.m_Aniso);
-            endiannessWriter.WriteSingle(texture2D.textureSettings.m_MipBias);
-            endiannessWriter.WriteInt32(texture2D.textureSettings.m_WrapMode);
-            endiannessWriter.WriteInt32(texture2D.textureSettings.m_WrapV);
-            endiannessWriter.WriteInt32(texture2D.textureSettings.m_WrapW);
-
-            endiannessWriter.WriteInt32(texture2D.m_LightmapFormat);
-            endiannessWriter.WriteInt32(texture2D.m_ColorSpace);
-            endiannessWriter.WriteInt32(texture2D.image_data_size);
-
-            endiannessWriter.WriteUInt32(texture2D.m_StreamData.offset);
-            endiannessWriter.WriteUInt32(texture2D.m_StreamData.size);
-            endiannessWriter.WriteAlignedString(texture2D.m_StreamData.path);
-
-            // TODO
-            endiannessWriter.Write(new byte[1] { 0});
+           
             binaryWriter.Write(AssetDatabase.LoadAssetAtPath<UnityEngine.Texture2D>("Assets/Turtle.jpg").GetRawTextureData());
         }
     }
@@ -680,11 +686,7 @@ public class Build
 
 }
 
-class AssetBundle
-{
-    public PPtr[] PreloadTable;
-    public KeyValuePair<string, AssetInfo>[] Container;
-}
+
 
 class AssetInfo
 {
