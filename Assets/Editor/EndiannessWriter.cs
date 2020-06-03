@@ -14,7 +14,10 @@ class EndiannessWriter : IDisposable
     {
         _writer = writer;
         Endianness = endianness;
-    } 
+    }
+
+    public long Position
+        => _writer.BaseStream.Position;
 
     public void WriteWithoutEndianness(byte[] buffer)
         => _writer.Write(buffer);
@@ -153,24 +156,24 @@ class EndiannessWriter : IDisposable
     {
         WriteInt32(value.Length);
         WriteWithoutEndianness(Encoding.UTF8.GetBytes(value));
-        //Align(4);
+        Align(4);
     }
 
     public void WritePPtr(PPtr pptr, UInt32 version)
     {
-        WriteInt32(pptr.m_FileID);
+        WriteInt32(pptr.FileID);
 
         if (version < 14)
-            WriteInt32((Int32)pptr.m_PathID);
+            WriteInt32((Int32)pptr.PathID);
         else
-            WriteInt64(pptr.m_PathID);
+            WriteInt64(pptr.PathID);
     }
 
     public void WriteAssetInfo(AssetInfo value, UInt32 version)
     {
-        WriteInt32(value.preloadIndex);
-        WriteInt32(value.preloadSize);
-        WritePPtr(value.asset, version);
+        WriteInt32(value.PreloadIndex);
+        WriteInt32(value.PreloadSize);
+        WritePPtr(value.Asset, version);
     }
 
     public void WriteBoolean(bool value)

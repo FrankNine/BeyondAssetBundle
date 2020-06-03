@@ -282,12 +282,22 @@ class AssetBundle
     public string Name;
     public PPtr[] PreloadTable;
     public KeyValuePair<string, AssetInfo>[] Container;
+    public AssetInfo MainAsset;
+    public UInt32 RuntimeCompatibility;
+    public string AssetBundleName;
 }
 
 class PPtr
 {
-    public int FileID;
-    public long PathID;
+    public Int32 FileID;
+    public Int64 PathID;
+}
+
+class AssetInfo
+{
+    public Int32 PreloadIndex;
+    public Int32 PreloadSize;
+    public PPtr Asset;
 }
 
 public class Build  
@@ -417,6 +427,12 @@ public class Build
             endiannessWriter.WriteAlignedString(container.Key);
             endiannessWriter.WriteAssetInfo(container.Value, serializationVersion);
         }
+
+        //TODO
+        endiannessWriter.WriteAssetInfo(assetBundle.MainAsset, serializationVersion);
+
+        endiannessWriter.WriteUInt32(assetBundle.RuntimeCompatibility);
+        endiannessWriter.WriteAlignedString(assetBundle.AssetBundleName);
     }
 
     private static void _WriteTexture
@@ -609,16 +625,28 @@ public class Build
                         "assets/turtle.jpg",
                         new AssetInfo
                         {
-                            preloadIndex = 0,
-                            preloadSize = 1,
-                            asset = new PPtr
+                            PreloadIndex = 0,
+                            PreloadSize = 1,
+                            Asset = new PPtr
                             {
                                 FileID = 0,
                                 PathID = 6597701691304967057
                             }
                         }
                     )
-                }
+                },
+                MainAsset = new AssetInfo
+                {
+                    PreloadIndex = 0,
+                    PreloadSize = 0,
+                    Asset = new PPtr
+                    {
+                        FileID = 0,
+                        PathID = 0
+                    }
+                },
+                RuntimeCompatibility = 1,
+                AssetBundleName = "texture",
             };
 
             var texture2D = new Texture2D
@@ -687,13 +715,6 @@ public class Build
 }
 
 
-
-class AssetInfo
-{
-    public int preloadIndex;
-    public int preloadSize;
-    public PPtr asset;
-}
 
 class Texture2D
 {
