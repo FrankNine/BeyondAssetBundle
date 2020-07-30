@@ -1,6 +1,5 @@
 ﻿using System;
 using System.IO;
-using System.Text;
 using System.Linq;
 using System.Collections.Generic;
 
@@ -23,35 +22,6 @@ public class Build
         );
     }
 
-    private static YamlNode _FindYamlChildNode(YamlMappingNode node, string tag)
-    {
-        foreach (var entry in node.Children)
-        {
-            if(((YamlScalarNode)entry.Key).Value == tag)
-            {
-                return entry.Value;
-            }
-        }
-
-        return null;
-    }
-
-    private static Int64 _GetPathId(string guid, Int64 fileId)
-    {
-        var input = new List<byte>();
-        input.AddRange(Encoding.ASCII.GetBytes(guid));
-        input.AddRange(BitConverter.GetBytes((Int32)3));
-        input.AddRange(BitConverter.GetBytes(fileId));
-
-        var output = Md4.Md4Hash(input);
-        return BitConverter.ToInt64(output.Take(8).ToArray(), 0);
-    }
-
-    public static string ByteArrayToString(byte[] ba)
-    {
-        return BitConverter.ToString(ba).Replace("-", "");
-    }
-
     [MenuItem("AssetBundle/Build Counterfeit")]
     public static void BuildCounterfeit()
     {
@@ -63,14 +33,14 @@ public class Build
         yaml.Load(metaContent);
 
         var rootNode = yaml.Documents[0].RootNode;
-        var guidNode = _FindYamlChildNode((YamlMappingNode)rootNode, "guid");
+        var guidNode = Utility.FindYamlChildNode((YamlMappingNode)rootNode, "guid");
         string guid = ((YamlScalarNode) guidNode).Value;
-        var textureImporterNode = _FindYamlChildNode((YamlMappingNode)rootNode, "TextureImporter");
-        var assetBundleNameNode = _FindYamlChildNode((YamlMappingNode)textureImporterNode, "assetBundleName");
+        var textureImporterNode = Utility.FindYamlChildNode((YamlMappingNode)rootNode, "TextureImporter");
+        var assetBundleNameNode = Utility.FindYamlChildNode((YamlMappingNode)textureImporterNode, "assetBundleName");
         string assetBundleName = ((YamlScalarNode)assetBundleNameNode).Value;
-        string cabFilename = "CAB-" + ByteArrayToString(Md4.Md4Hash(new List<byte>(Encoding.ASCII.GetBytes(assetBundleName)))).ToLower();
-        string cabRessFilename = cabFilename + ".resS";
-        string archivePath = $"archive:/{cabFilename}/{cabRessFilename}";
+        string cabFilename = Utility.GetCabFilename(assetBundleName);
+        string cabRessFilename = Utility.GetCabRessFilename(cabFilename);
+        string archivePath = Utility.GetArchivePath(cabFilename, cabRessFilename);
 
         // TODO: Replace jpeg loading library
         var unityTexture2D = AssetDatabase.LoadAssetAtPath<UnityEngine.Texture2D>(texturePath);
@@ -79,7 +49,7 @@ public class Build
         int height = unityTexture2D.height;
 
         int textureFileId = 2800000;
-        Int64 texturePathId = _GetPathId(guid, textureFileId);
+        Int64 texturePathId = Utility.GetPathId(guid, textureFileId);
 
         var blocksInfoAndDirectory = new BlocksInfoAndDirectory
         {
