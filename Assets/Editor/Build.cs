@@ -366,12 +366,12 @@ public class Build
         return null;
     }
 
-    private static Int64 _GetPathId(string guid, int fileId)
+    private static Int64 _GetPathId(string guid, Int64 fileId)
     {
         var input = new List<byte>();
         input.AddRange(Encoding.ASCII.GetBytes(guid));
         input.AddRange(BitConverter.GetBytes((Int32)3));
-        input.AddRange(BitConverter.GetBytes((Int64)fileId));
+        input.AddRange(BitConverter.GetBytes(fileId));
 
         var output = Md4.Md4Hash(input);
         return BitConverter.ToInt64(output.Take(8).ToArray(), 0);
