@@ -9,13 +9,6 @@ using UnityEditor;
 using K4os.Compression.LZ4;
 using YamlDotNet.RepresentationModel;
 
-public enum Endianness
-{
-    Little = 0,
-    Big    = 1
-}
-
-
 public class Build  
 {
     [MenuItem("AssetBundle/Build AssetBundle")]
@@ -28,186 +21,6 @@ public class Build
             UnityEditor.BuildAssetBundleOptions.DisableWriteTypeTree, 
             UnityEditor.BuildTarget.Android
         );
-    }
-
-
-    private static void _WriteHeader(EndiannessWriter endiannessWriter, UnityHeader header)
-    {
-        endiannessWriter.WriteString(header.Signature);
-        endiannessWriter.WriteInt32(header.Version);
-        endiannessWriter.WriteString(header.UnityVersion);
-        endiannessWriter.WriteString(header.UnityRevision);
-        endiannessWriter.WriteInt64(header.Size);
-        endiannessWriter.WriteInt32(header.CompressedBlocksInfoSize);
-        endiannessWriter.WriteInt32(header.UncompressedBlocksInfoSize);
-        endiannessWriter.WriteInt32(header.Flags);
-    }
-
-    private static void _WriteBlocksInfoAndDirectory
-    (
-        EndiannessWriter endiannessWriter, 
-        BlocksInfoAndDirectory blocksInfoAndDirectory
-    )
-    {
-        endiannessWriter.Write(blocksInfoAndDirectory.UncompressedDataHash);
-
-        endiannessWriter.WriteInt32(blocksInfoAndDirectory.StorageBlocks.Length);
-        foreach (var storageBlock in blocksInfoAndDirectory.StorageBlocks)
-        {
-            endiannessWriter.WriteUInt32(storageBlock.CompressedSize);
-            endiannessWriter.WriteUInt32(storageBlock.UncompressedSize);
-            endiannessWriter.WriteUInt16(storageBlock.Flags);
-        }
-
-        endiannessWriter.WriteInt32(blocksInfoAndDirectory.Nodes.Length);
-        foreach (var node in blocksInfoAndDirectory.Nodes)
-        {
-            endiannessWriter.WriteInt64(node.Offset);
-            endiannessWriter.WriteInt64(node.Size);
-            endiannessWriter.WriteUInt32(node.Flags);
-            endiannessWriter.WriteString(node.Path);
-        }
-    }
-
-    private static void _WriteSerializedFileHeader
-    (
-        EndiannessWriter endiannessWriter,
-        SerializedFileHeader serializedFileHeader
-    )
-    {
-        endiannessWriter.WriteUInt32(serializedFileHeader.MetadataSize);
-        endiannessWriter.WriteUInt32((UInt32)serializedFileHeader.FileSize);
-        endiannessWriter.WriteUInt32(serializedFileHeader.Version);
-        endiannessWriter.WriteUInt32((UInt32)serializedFileHeader.DataOffset);
-
-        endiannessWriter.Write(new[] { (byte)serializedFileHeader.Endianness });
-        // Writing endianness changes from here
-        // What the actual fuck?
-        endiannessWriter.Endianness = serializedFileHeader.Endianness;
-
-        endiannessWriter.Write(serializedFileHeader.Reserved);
-        endiannessWriter.WriteString(serializedFileHeader.UnityVersion);
-        endiannessWriter.WriteInt32((Int32)serializedFileHeader.BuildTarget);
-        endiannessWriter.WriteBoolean(serializedFileHeader.IsTypeTreeEnabled);
-
-        endiannessWriter.WriteInt32(serializedFileHeader.SerializedTypes.Length);
-        foreach (var serializedType in serializedFileHeader.SerializedTypes)
-        {
-            endiannessWriter.WriteInt32(serializedType.ClassID);
-            endiannessWriter.WriteBoolean(serializedType.IsStrippedType);
-            endiannessWriter.WriteInt16(serializedType.ScriptTypeIndex);
-            if ((serializedFileHeader.Version < 16 && serializedType.ClassID < 0) ||
-                (serializedFileHeader.Version >= 16 && serializedType.ClassID == 114))
-            {
-                endiannessWriter.Write(serializedType.ScriptID); //Hash128
-            }
-            endiannessWriter.Write(serializedType.OldTypeHash);
-        }
-
-        endiannessWriter.WriteInt32(serializedFileHeader.ObjectInfos.Length);
-        foreach (var objectInfo in serializedFileHeader.ObjectInfos)
-        {
-            endiannessWriter.Align(4);
-            endiannessWriter.WriteInt64(objectInfo.PathID);
-            endiannessWriter.WriteInt32((Int32)objectInfo.ByteStart);
-            endiannessWriter.WriteUInt32(objectInfo.ByteSize);
-            endiannessWriter.WriteInt32(objectInfo.TypeID);
-        }
-
-        // Script
-        int scriptCount = 0;
-        endiannessWriter.WriteInt32(scriptCount);
-
-        // Externals
-        int externalCount = 0;
-        endiannessWriter.WriteInt32(externalCount);
-
-        string userInformation = "";
-        endiannessWriter.WriteString(userInformation);
-    }
-
-
-    private static void _WriteAssetBundle
-    (
-        EndiannessWriter endiannessWriter,
-        AssetBundle assetBundle,
-        UInt32 serializationVersion
-    )
-    {
-        endiannessWriter.WriteAlignedString(assetBundle.Name);
-
-        endiannessWriter.WritePPtrArray(assetBundle.PreloadTable, serializationVersion);
-        endiannessWriter.WriteInt32(assetBundle.Container.Length);
-        foreach (var container in assetBundle.Container)
-        {
-            endiannessWriter.WriteAlignedString(container.Key);
-            endiannessWriter.WriteAssetInfo(container.Value, serializationVersion);
-        }
-
-        endiannessWriter.WriteAssetInfo(assetBundle.MainAsset, serializationVersion);
-
-        endiannessWriter.WriteUInt32(assetBundle.RuntimeCompatibility);
-
-        endiannessWriter.WriteAlignedString(assetBundle.AssetBundleName);
-        endiannessWriter.WriteInt32(assetBundle.DependencyAssetBundleNames.Length);
-        foreach (var dependencyAssetBundleName in assetBundle.DependencyAssetBundleNames)
-        {
-            endiannessWriter.WriteAlignedString(dependencyAssetBundleName);
-        }
-        
-        endiannessWriter.WriteBoolean(assetBundle.IsStreamedSceneAssetBundle);
-        endiannessWriter.Align(4);
-        endiannessWriter.WriteInt32(assetBundle.ExplicitDataLayout);
-        endiannessWriter.WriteInt32(assetBundle.PathFlags);
-
-        endiannessWriter.WriteInt32(assetBundle.SceneHashes.Count);
-        foreach (var sceneHash in assetBundle.SceneHashes)
-        {
-            endiannessWriter.WriteString(sceneHash.Key);
-            endiannessWriter.WriteString(sceneHash.Value);
-        }
-    }
-
-    private static void _WriteTexture2D
-    (
-        EndiannessWriter endiannessWriter,
-        Texture2D texture2D
-    )
-    {
-        endiannessWriter.WriteAlignedString(texture2D.Name);
-
-        endiannessWriter.WriteInt32(texture2D.ForcedFallbackFormat);
-        endiannessWriter.WriteBoolean(texture2D.DownscaleFallback);
-        endiannessWriter.Align(4);
-
-        endiannessWriter.WriteInt32(texture2D.Width);
-        endiannessWriter.WriteInt32(texture2D.Height);
-        endiannessWriter.WriteInt32(texture2D.CompleteImageSize);
-        endiannessWriter.WriteInt32((Int32) texture2D.TextureFormat);
-        endiannessWriter.WriteInt32(texture2D.MipCount);
-
-        endiannessWriter.WriteBoolean(texture2D.IsReadable);
-        endiannessWriter.WriteBoolean(texture2D.IsReadAllowed);
-        endiannessWriter.Align(4);
-
-        endiannessWriter.WriteInt32(texture2D.StreamingMipmapsPriority);
-        endiannessWriter.WriteInt32(texture2D.ImageCount);
-        endiannessWriter.WriteInt32(texture2D.TextureDimension);
-
-        endiannessWriter.WriteInt32(texture2D.TextureSettings.FilterMode);
-        endiannessWriter.WriteInt32(texture2D.TextureSettings.Aniso);
-        endiannessWriter.WriteSingle(texture2D.TextureSettings.MipBias);
-        endiannessWriter.WriteInt32(texture2D.TextureSettings.WrapMode);
-        endiannessWriter.WriteInt32(texture2D.TextureSettings.WrapV);
-        endiannessWriter.WriteInt32(texture2D.TextureSettings.WrapW);
-
-        endiannessWriter.WriteInt32(texture2D.LightmapFormat);
-        endiannessWriter.WriteInt32(texture2D.ColorSpace);
-        endiannessWriter.WriteInt32(texture2D.ImageDataSize);
-
-        endiannessWriter.WriteUInt32(texture2D.StreamData.Offset);
-        endiannessWriter.WriteUInt32(texture2D.StreamData.Size);
-        endiannessWriter.WriteAlignedString(texture2D.StreamData.Path);
     }
 
     private static YamlNode _FindYamlChildNode(YamlMappingNode node, string tag)
@@ -307,7 +120,7 @@ public class Build
         using (var memoryBinaryWriter = new BinaryWriter(memoryStream))
         using (var endiannessWriterCompressed = new EndiannessWriter(memoryBinaryWriter, Endianness.Big))
         {
-            _WriteBlocksInfoAndDirectory(endiannessWriterCompressed, blocksInfoAndDirectory);
+            blocksInfoAndDirectory.Write(endiannessWriterCompressed);
 
             byte[] uncompressedBuffer = memoryStream.ToArray();
             uncompressedSize = uncompressedBuffer.Length;
@@ -473,13 +286,13 @@ public class Build
         using (var memoryBinaryWriter = new BinaryWriter(memoryStream))
         using (var endiannessWriterStorage = new EndiannessWriter(memoryBinaryWriter, Endianness.Big))
         {
-            _WriteSerializedFileHeader(endiannessWriterStorage, serializedFileHeader);
+            serializedFileHeader.Write(endiannessWriterStorage);
             metadataSize = (Int32)endiannessWriterStorage.Position;
 
             endiannessWriterStorage.Align((int)serializedFileHeader.DataOffset);
             assetBundleObjectPosition = (Int32)endiannessWriterStorage.Position;
             assetBundleObjectOffset = (Int32)(assetBundleObjectPosition - serializedFileHeader.DataOffset);
-            _WriteAssetBundle(endiannessWriterStorage, assetBundle, serializedFileHeader.Version);
+            assetBundle.Write(endiannessWriterStorage, serializedFileHeader.Version);
             assetBundleObjectSize = (Int32)(endiannessWriterStorage.Position - assetBundleObjectPosition);
 
             // TODO: What is this padding?
@@ -487,7 +300,7 @@ public class Build
 
             texture2DPosition = (Int32)endiannessWriterStorage.Position;
             texture2DOffset = (Int32)(texture2DPosition - serializedFileHeader.DataOffset);
-            _WriteTexture2D(endiannessWriterStorage, texture2D);
+            texture2D.Write(endiannessWriterStorage);
             texture2DObjectSize = (Int32) (endiannessWriterStorage.Position - texture2DPosition);
 
             endiannessWriterStorage.WriteWithoutEndianness(textureRawData);
@@ -514,7 +327,7 @@ public class Build
         using (var binaryWriter = new BinaryWriter(fileStream))
         using (var endiannessWriter = new EndiannessWriter(binaryWriter, Endianness.Big))
         {
-            _WriteHeader(endiannessWriter, header);
+            header.Write(endiannessWriter);
             endiannessWriter.WriteWithoutEndianness(compressedBuffer);
             endiannessWriter.WriteWithoutEndianness(serializeFileBuffer);
         }

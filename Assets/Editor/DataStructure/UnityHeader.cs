@@ -10,4 +10,16 @@ public class UnityHeader
     public Int32 CompressedBlocksInfoSize;
     public Int32 UncompressedBlocksInfoSize;
     public Int32 Flags;
+
+    internal void Write(EndiannessWriter writer)
+    {
+        writer.WriteString(Signature);
+        writer.WriteInt32(Version);
+        writer.WriteString(UnityVersion);
+        writer.WriteString(UnityRevision);
+        writer.WriteInt64(Size);
+        writer.WriteInt32(CompressedBlocksInfoSize);
+        writer.WriteInt32(UncompressedBlocksInfoSize);
+        writer.WriteInt32(Flags);
+    }
 }
